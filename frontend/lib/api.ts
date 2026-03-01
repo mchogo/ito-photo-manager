@@ -1,4 +1,10 @@
-import type { EquipmentDef, Project, ValidationResult } from "@/types";
+import type {
+  EquipmentDef,
+  Project,
+  ProjectListFilter,
+  ProjectUpdateRequest,
+  ValidationResult,
+} from "@/types";
 
 const API_BASE = "/api";
 
@@ -16,12 +22,31 @@ export async function getEquipmentList(): Promise<EquipmentDef[]> {
   return fetchJSON<EquipmentDef[]>("/equipment");
 }
 
+/** 案件一覧を取得（フィルタリング対応） */
+export async function listProjects(filters?: ProjectListFilter): Promise<Project[]> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.worker_name) params.set("worker_name", filters.worker_name);
+  if (filters?.scheduled_date) params.set("scheduled_date", filters.scheduled_date);
+  const qs = params.toString();
+  return fetchJSON<Project[]>(`/projects${qs ? `?${qs}` : ""}`);
+}
+
 /** 案件を作成 */
 export async function createProject(data: {
   site_id: string;
   work_date: string;
   worker_name: string;
   equipment_ids: string[];
+  project_name?: string;
+  project_number?: string;
+  address?: string;
+  status?: string;
+  memo?: string;
+  description?: string;
+  work_start_time?: string;
+  work_end_time?: string;
+  scheduled_date?: string;
 }): Promise<Project> {
   return fetchJSON<Project>("/projects", {
     method: "POST",
@@ -33,6 +58,18 @@ export async function createProject(data: {
 /** 案件データを取得 */
 export async function getProject(projectId: string): Promise<Project> {
   return fetchJSON<Project>(`/projects/${projectId}`);
+}
+
+/** 案件データを部分更新 */
+export async function updateProject(
+  projectId: string,
+  data: ProjectUpdateRequest,
+): Promise<Project> {
+  return fetchJSON<Project>(`/projects/${projectId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
 }
 
 /** 写真をアップロード */

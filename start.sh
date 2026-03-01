@@ -22,6 +22,7 @@ echo ""
 # Backend 起動
 echo "[Backend]  http://localhost:8000 で起動中..."
 cd backend
+source venv/bin/activate
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
 BACKEND_PID=$!
 cd ..

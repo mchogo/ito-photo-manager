@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../lib/**/*.{ts,tsx}";
+@source "../types/**/*.{ts,tsx}";
 
 /* ============================================================
    iOS Liquid Glass Design System

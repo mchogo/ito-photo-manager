@@ -13,3 +13,5 @@ frontend/.next/
 
 # OS
 .DS_Store
+venv/
+frontend/tsconfig.tsbuildinfo

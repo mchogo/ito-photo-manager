@@ -6,11 +6,10 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from pathlib import Path
+from typing import List, Optional
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
@@ -22,6 +21,7 @@ from models import (
     PhotoUploadResponse,
     ProjectCreate,
     ProjectResponse,
+    ProjectUpdate,
     ValidationResult,
 )
 
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="いとうさんフォトマネージャー API",
     description="現場撮影管理・Excel自動化システム",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 # CORS設定（Next.jsフロントエンドからのアクセスを許可）
@@ -62,6 +62,20 @@ def list_equipment():
 
 # --- 案件 ---
 
+@app.get("/api/projects", response_model=List[ProjectResponse])
+def list_projects(
+    status: Optional[str] = Query(None, description="ステータスで絞り込み"),
+    worker_name: Optional[str] = Query(None, description="作業員名で絞り込み"),
+    scheduled_date: Optional[str] = Query(None, description="予定日（YYYY-MM-DD）で絞り込み"),
+):
+    """案件一覧を返す（フィルタリング対応）"""
+    return storage.list_projects(
+        status=status,
+        worker_name=worker_name,
+        scheduled_date=scheduled_date,
+    )
+
+
 @app.post("/api/projects", response_model=ProjectResponse)
 def create_project(body: ProjectCreate):
     """案件を新規作成する"""
@@ -71,6 +85,15 @@ def create_project(body: ProjectCreate):
             work_date=body.work_date,
             worker_name=body.worker_name,
             equipment_ids=body.equipment_ids,
+            project_name=body.project_name,
+            project_number=body.project_number,
+            address=body.address,
+            status=body.status.value,
+            memo=body.memo,
+            description=body.description,
+            work_start_time=body.work_start_time,
+            work_end_time=body.work_end_time,
+            scheduled_date=body.scheduled_date,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -81,6 +104,19 @@ def create_project(body: ProjectCreate):
 def get_project(project_id: str):
     """案件データを取得する"""
     project = storage.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.patch("/api/projects/{project_id}", response_model=ProjectResponse)
+def update_project(project_id: str, body: ProjectUpdate):
+    """案件データを部分更新する（ステータス、メモ等）"""
+    updates = body.model_dump(exclude_none=True)
+    # ProjectStatus Enum を文字列に変換
+    if "status" in updates and hasattr(updates["status"], "value"):
+        updates["status"] = updates["status"].value
+    project = storage.update_project(project_id, updates)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
     return project
