@@ -1,11 +1,27 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { getProject, updateProject, validateProject } from "@/lib/api";
-import type { Project, ProjectStatus, ProjectUpdateRequest, ValidationResult } from "@/types";
-import { PROJECT_STATUSES, STATUS_COLORS } from "@/types";
+import {
+  getProject,
+  updateProject,
+  validateProject,
+  setRetakeInstruction,
+  uploadDocument,
+  deleteDocument,
+  getDocumentUrl,
+  setResubmitInstruction,
+} from "@/lib/api";
+import type {
+  Project,
+  ProjectDocument,
+  ProjectStatus,
+  ProjectUpdateRequest,
+  ValidationResult,
+} from "@/types";
+import { PROJECT_STATUSES, STATUS_COLORS, DOCUMENT_CATEGORIES } from "@/types";
+import { useAdminMode } from "@/lib/useAdminMode";
 
 type Tab = "info" | "shoot" | "docs";
 
@@ -31,6 +47,76 @@ function SaveIndicator({ saving, saved }: { saving: boolean; saved: boolean }) {
   if (saving) return <span className="text-xs text-indigo-400 font-medium">保存中...</span>;
   if (saved) return <span className="text-xs text-green-500 font-medium">✓ 保存済み</span>;
   return null;
+}
+
+// --- Timelog Section ---
+
+const TIMELOG_ACTIONS = [
+  { field: "departure_time" as const, label: "出発", emoji: "🚗", color: "99,102,241" },
+  { field: "arrival_time" as const,   label: "到着", emoji: "📍", color: "34,197,94" },
+  { field: "checkout_time" as const,  label: "退店", emoji: "🏁", color: "249,115,22" },
+] as const;
+
+function TimelogSection({
+  project,
+  onUpdate,
+}: {
+  project: Project;
+  onUpdate: (updates: ProjectUpdateRequest) => Promise<void>;
+}) {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const stamp = async (field: "departure_time" | "arrival_time" | "checkout_time") => {
+    if (project[field]) return;
+    setLoading(field);
+    try {
+      await onUpdate({ [field]: new Date().toISOString() });
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="liquid-glass p-4 space-y-3">
+      <FieldLabel>打刻</FieldLabel>
+      <div className="grid grid-cols-3 gap-2">
+        {TIMELOG_ACTIONS.map(({ field, label, emoji, color }) => {
+          const recorded = project[field] ?? null;
+          const isLoading = loading === field;
+          const hhmm = recorded
+            ? recorded.match(/T(\d{2}:\d{2})/)?.[1] ?? recorded.slice(11, 16)
+            : null;
+          return (
+            <button
+              key={field}
+              disabled={!!recorded || isLoading}
+              onClick={() => stamp(field)}
+              className="flex flex-col items-center gap-1 py-3 rounded-2xl text-xs font-bold transition-all"
+              style={
+                recorded
+                  ? {
+                      background: `rgba(${color},0.08)`,
+                      border: `1px solid rgba(${color},0.3)`,
+                      color: `rgba(${color},0.8)`,
+                      cursor: "default",
+                    }
+                  : {
+                      background: `linear-gradient(135deg, rgba(${color},0.12), rgba(${color},0.07))`,
+                      border: `1px solid rgba(${color},0.2)`,
+                      color: `rgba(${color},0.9)`,
+                    }
+              }
+            >
+              <span className="text-lg">{emoji}</span>
+              <span>{label}</span>
+              {hhmm && <span className="text-[10px] font-medium opacity-75">{hhmm}</span>}
+              {isLoading && <span className="text-[10px] opacity-50">送信中...</span>}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // --- Info Tab ---
@@ -76,6 +162,9 @@ function InfoTab({
         <h3 className="font-bold text-gray-700 text-sm">案件情報</h3>
         <SaveIndicator saving={saving} saved={saved} />
       </div>
+
+      {/* 打刻 */}
+      <TimelogSection project={project} onUpdate={onUpdate} />
 
       {/* Status */}
       <div className="liquid-glass p-4 space-y-3">
@@ -228,13 +317,117 @@ function InfoTab({
 
 // --- Shoot Tab ---
 
+const RETAKE_PRESETS = ["不鮮明", "角度不良", "範囲外", "その他"];
+
+function RetakeInstructionPanel({
+  projectId,
+  equipmentId,
+  slotId,
+  currentReason,
+  onUpdated,
+}: {
+  projectId: string;
+  equipmentId: string;
+  slotId: string;
+  currentReason: string | null;
+  onUpdated: (project: Project) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [preset, setPreset] = useState(RETAKE_PRESETS[0]);
+  const [custom, setCustom] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleSet = async () => {
+    const reason = preset === "その他" ? custom.trim() : preset;
+    if (!reason) return;
+    setLoading(true);
+    try {
+      const updated = await setRetakeInstruction(projectId, equipmentId, slotId, reason);
+      onUpdated(updated);
+      setOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClear = async () => {
+    setLoading(true);
+    try {
+      const updated = await setRetakeInstruction(projectId, equipmentId, slotId, null);
+      onUpdated(updated);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (currentReason) {
+    return (
+      <button
+        onClick={handleClear}
+        disabled={loading}
+        className="text-[10px] font-bold px-2 py-0.5 rounded-full text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors"
+      >
+        指示解除
+      </button>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="text-[10px] font-bold px-2 py-0.5 rounded-full text-gray-500 bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors"
+      >
+        再撮影指示
+      </button>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+      <select
+        value={preset}
+        onChange={(e) => setPreset(e.target.value)}
+        className="text-[10px] rounded-lg border border-gray-200 bg-white px-1.5 py-0.5"
+      >
+        {RETAKE_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+      </select>
+      {preset === "その他" && (
+        <input
+          type="text"
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="理由を入力"
+          className="text-[10px] rounded-lg border border-gray-200 bg-white px-1.5 py-0.5 w-24"
+        />
+      )}
+      <button
+        onClick={handleSet}
+        disabled={loading || (preset === "その他" && !custom.trim())}
+        className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-40 transition-colors"
+      >
+        送信
+      </button>
+      <button
+        onClick={() => setOpen(false)}
+        className="text-[10px] text-gray-400 hover:text-gray-600"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function ShootTab({
   project,
   validation,
+  onProjectUpdated,
 }: {
   project: Project;
   validation: ValidationResult | null;
+  onProjectUpdated: (project: Project) => void;
 }) {
+  const [isAdmin] = useAdminMode();
   const totalSlots = project.equipment.reduce((s, eq) => s + eq.slots.length, 0);
   const filledSlots = project.equipment.reduce(
     (s, eq) => s + eq.slots.filter((sl) => sl.photo_filename).length,
@@ -312,16 +505,45 @@ function ShootTab({
       {project.equipment.map((eq) => (
         <div key={eq.equipment_id} className="liquid-glass p-4 space-y-2">
           <p className="font-bold text-gray-700 text-sm">{eq.name}</p>
-          {eq.slots.map((slot) => (
-            <div key={slot.slot_id} className="flex items-center justify-between text-xs font-medium">
-              <span className="text-gray-600">{slot.label}</span>
-              {slot.photo_filename ? (
-                <span className="text-green-600">✓ 撮影済み</span>
-              ) : (
-                <span className="text-red-400">未撮影</span>
-              )}
-            </div>
-          ))}
+          {eq.slots.map((slot) => {
+            const hasRetake = !!slot.retake_instruction;
+            return (
+              <div
+                key={slot.slot_id}
+                className="rounded-xl p-2.5 transition-all"
+                style={
+                  hasRetake
+                    ? { border: "1.5px solid rgba(239,68,68,0.4)", background: "rgba(254,226,226,0.3)" }
+                    : {}
+                }
+              >
+                <div className="flex items-center justify-between text-xs font-medium">
+                  <span className="text-gray-600">{slot.label}</span>
+                  <div className="flex items-center gap-2">
+                    {slot.photo_filename ? (
+                      <span className="text-green-600">✓ 撮影済み</span>
+                    ) : (
+                      <span className="text-red-400">未撮影</span>
+                    )}
+                    {isAdmin && slot.photo_filename && (
+                      <RetakeInstructionPanel
+                        projectId={project.project_id}
+                        equipmentId={eq.equipment_id}
+                        slotId={slot.slot_id}
+                        currentReason={slot.retake_instruction ?? null}
+                        onUpdated={onProjectUpdated}
+                      />
+                    )}
+                  </div>
+                </div>
+                {hasRetake && (
+                  <p className="text-[11px] font-bold text-red-600 mt-1.5">
+                    ⚠ {slot.retake_instruction}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       ))}
 
@@ -344,14 +566,328 @@ function ShootTab({
   );
 }
 
-// --- Docs Tab (placeholder for Phase 2) ---
+// --- Docs Tab ---
 
-function DocsTab() {
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function DocumentRow({
+  doc,
+  projectId,
+  isAdmin,
+  onDelete,
+  onResubmit,
+}: {
+  doc: ProjectDocument;
+  projectId: string;
+  isAdmin: boolean;
+  onDelete: (docId: string) => void;
+  onResubmit: (docId: string, reason: string | null) => void;
+}) {
+  const [resubmitOpen, setResubmitOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleResubmitSet = async () => {
+    const r = reason.trim();
+    if (!r) return;
+    setLoading(true);
+    try {
+      await onResubmit(doc.document_id, r);
+      setResubmitOpen(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResubmitClear = async () => {
+    setLoading(true);
+    try {
+      await onResubmit(doc.document_id, null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`「${doc.original_filename}」を削除しますか？`)) return;
+    setLoading(true);
+    try {
+      await onDelete(doc.document_id);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="liquid-glass p-8 text-center space-y-3">
-      <div className="text-4xl">📁</div>
-      <p className="font-bold text-gray-600 text-sm">書類管理</p>
-      <p className="text-xs text-gray-400 font-medium">Phase 2 で実装予定</p>
+    <div
+      className="rounded-xl p-3 space-y-1.5"
+      style={
+        doc.resubmit_instruction
+          ? { border: "1.5px solid rgba(239,68,68,0.4)", background: "rgba(254,226,226,0.3)" }
+          : { border: "1px solid rgba(0,0,0,0.06)", background: "rgba(255,255,255,0.5)" }
+      }
+    >
+      <div className="flex items-start gap-2">
+        <a
+          href={getDocumentUrl(projectId, doc.stored_filename)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 min-w-0"
+        >
+          <p className="text-xs font-bold text-indigo-600 truncate hover:underline">
+            📄 {doc.original_filename}
+          </p>
+          <p className="text-[10px] text-gray-400 font-medium mt-0.5">
+            {formatBytes(doc.size_bytes)} · {doc.uploaded_at.slice(0, 10)}
+          </p>
+        </a>
+        {isAdmin && (
+          <div className="flex items-center gap-1 shrink-0">
+            {doc.resubmit_instruction ? (
+              <button
+                onClick={handleResubmitClear}
+                disabled={loading}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-orange-600 bg-orange-50 border border-orange-200 hover:bg-orange-100"
+              >
+                指示解除
+              </button>
+            ) : (
+              <button
+                onClick={() => setResubmitOpen(!resubmitOpen)}
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full text-gray-500 bg-gray-50 border border-gray-200 hover:bg-gray-100"
+              >
+                再提出指示
+              </button>
+            )}
+            <button
+              onClick={handleDelete}
+              disabled={loading}
+              className="text-[10px] font-bold px-2 py-0.5 rounded-full text-red-500 bg-red-50 border border-red-200 hover:bg-red-100"
+            >
+              削除
+            </button>
+          </div>
+        )}
+      </div>
+      {doc.resubmit_instruction && (
+        <p className="text-[11px] font-bold text-red-600">⚠ {doc.resubmit_instruction}</p>
+      )}
+      {resubmitOpen && (
+        <div className="flex items-center gap-1.5 pt-1">
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="再提出理由を入力"
+            className="flex-1 text-[10px] rounded-lg border border-gray-200 bg-white px-2 py-1"
+          />
+          <button
+            onClick={handleResubmitSet}
+            disabled={loading || !reason.trim()}
+            className="text-[10px] font-bold px-2 py-1 rounded-full text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-40"
+          >
+            送信
+          </button>
+          <button onClick={() => setResubmitOpen(false)} className="text-[10px] text-gray-400">✕</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocSection({
+  title,
+  docTypes,
+  project,
+  isAdmin,
+  onProjectUpdated,
+}: {
+  title: string;
+  docTypes: string[];
+  project: Project;
+  isAdmin: boolean;
+  onProjectUpdated: (p: Project) => void;
+}) {
+  const docs = (project.documents ?? []).filter((d) => docTypes.includes(d.document_type));
+  const [selectedType, setSelectedType] = useState(docTypes[0]);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleUpload = async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      await uploadDocument(project.project_id, selectedType, file);
+      // Refresh project to get updated documents list
+      const { getProject } = await import("@/lib/api");
+      const updated = await getProject(project.project_id);
+      onProjectUpdated(updated);
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "アップロードに失敗しました");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async (docId: string) => {
+    await deleteDocument(project.project_id, docId);
+    const { getProject } = await import("@/lib/api");
+    const updated = await getProject(project.project_id);
+    onProjectUpdated(updated);
+  };
+
+  const handleResubmit = async (docId: string, reason: string | null) => {
+    const updated = await setResubmitInstruction(project.project_id, docId, reason);
+    onProjectUpdated(updated);
+  };
+
+  return (
+    <div className="liquid-glass p-4 space-y-3">
+      <h4 className="font-bold text-gray-700 text-sm">{title}</h4>
+
+      {/* Upload UI */}
+      <div className="flex items-center gap-2">
+        {docTypes.length > 1 && (
+          <select
+            value={selectedType}
+            onChange={(e) => setSelectedType(e.target.value)}
+            className="input-glass text-xs py-1.5 flex-1"
+          >
+            {docTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
+        <label
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition-all"
+          style={{
+            background: uploading
+              ? "rgba(99,102,241,0.05)"
+              : "linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.12))",
+            border: "1px solid rgba(99,102,241,0.2)",
+            color: "rgba(99,102,241,0.9)",
+            opacity: uploading ? 0.6 : 1,
+          }}
+        >
+          {uploading ? "アップロード中..." : "＋ ファイルを追加"}
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx,.xlsx,.xls,.jpg,.jpeg,.png"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+            }}
+          />
+        </label>
+      </div>
+
+      {uploadError && (
+        <p className="text-[11px] font-medium text-red-600">{uploadError}</p>
+      )}
+
+      {/* Document list */}
+      {docs.length === 0 ? (
+        <p className="text-xs text-gray-400 font-medium text-center py-2">書類なし</p>
+      ) : (
+        <div className="space-y-2">
+          {docs.map((doc) => (
+            <DocumentRow
+              key={doc.document_id}
+              doc={doc}
+              projectId={project.project_id}
+              isAdmin={isAdmin}
+              onDelete={handleDelete}
+              onResubmit={handleResubmit}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocsTab({
+  project,
+  onUpdate,
+  onProjectUpdated,
+}: {
+  project: Project;
+  onUpdate: (updates: ProjectUpdateRequest) => Promise<void>;
+  onProjectUpdated: (p: Project) => void;
+}) {
+  const [isAdmin] = useAdminMode();
+  const [surveyNotes, setSurveyNotes] = useState(project.survey_notes ?? "");
+  const [notesSaving, setNotesSaving] = useState(false);
+
+  const handleNotesBlur = async () => {
+    const trimmed = surveyNotes.trim();
+    if (trimmed === (project.survey_notes ?? "")) return;
+    setNotesSaving(true);
+    try {
+      await onUpdate({ survey_notes: trimmed || null });
+    } finally {
+      setNotesSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Section 1: 統制からの資料 */}
+      <DocSection
+        title="統制からの資料"
+        docTypes={DOCUMENT_CATEGORIES["管理共有"]}
+        project={project}
+        isAdmin={isAdmin}
+        onProjectUpdated={onProjectUpdated}
+      />
+
+      {/* Section 2: 現地調査 */}
+      <DocSection
+        title="現地調査"
+        docTypes={DOCUMENT_CATEGORIES["現地調査"]}
+        project={project}
+        isAdmin={isAdmin}
+        onProjectUpdated={onProjectUpdated}
+      />
+
+      {/* 申し送り事項 (Section 2 entry) */}
+      <div className="liquid-glass p-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <FieldLabel>申し送り事項</FieldLabel>
+          {notesSaving && <span className="text-[10px] text-indigo-400 font-medium">保存中...</span>}
+        </div>
+        <textarea
+          value={surveyNotes}
+          onChange={(e) => setSurveyNotes(e.target.value)}
+          onBlur={handleNotesBlur}
+          rows={4}
+          placeholder="次工程への申し送り事項を記入..."
+          className="input-glass w-full resize-none"
+        />
+      </div>
+
+      {/* Section 3: 設置 */}
+      <DocSection
+        title="設置"
+        docTypes={DOCUMENT_CATEGORIES["設置"]}
+        project={project}
+        isAdmin={isAdmin}
+        onProjectUpdated={onProjectUpdated}
+      />
+
+      {/* 申し送り事項 (Section 3 read-only) */}
+      {project.survey_notes && (
+        <div className="liquid-glass p-4 space-y-2">
+          <FieldLabel>申し送り事項（参照）</FieldLabel>
+          <p className="text-xs text-gray-600 font-medium whitespace-pre-wrap">{project.survey_notes}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -471,8 +1007,12 @@ export default function ProjectDetailPage() {
 
       {/* Tab content */}
       {tab === "info" && <InfoTab project={project} onUpdate={handleUpdate} />}
-      {tab === "shoot" && <ShootTab project={project} validation={validation} />}
-      {tab === "docs" && <DocsTab />}
+      {tab === "shoot" && (
+        <ShootTab project={project} validation={validation} onProjectUpdated={setProject} />
+      )}
+      {tab === "docs" && (
+        <DocsTab project={project} onUpdate={handleUpdate} onProjectUpdated={setProject} />
+      )}
     </div>
   );
 }

@@ -5,23 +5,37 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
-from typing import List, Optional
+import mimetypes
+from datetime import date
+from typing import Annotated, List, Optional
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
 import equipment_master
 import storage
+import user_storage
+from auth import get_current_user, require_admin
 from excel_export import generate_excel
 from image_utils import resize_image
 from models import (
+    DocumentResponse,
+    DocumentType,
+    ImportResult,
+    LoginRequest,
     PhotoUploadResponse,
     ProjectCreate,
     ProjectResponse,
     ProjectUpdate,
+    RetakeInstructionUpdate,
+    TokenResponse,
+    UserCreate,
+    UserResponse,
     ValidationResult,
 )
 
@@ -35,8 +49,13 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="いとうさんフォトマネージャー API",
     description="現場撮影管理・Excel自動化システム",
-    version="2.0.0",
+    version="4.0.0",
 )
+
+
+@app.on_event("startup")
+def on_startup():
+    user_storage.ensure_default_admin()
 
 # CORS設定（Next.jsフロントエンドからのアクセスを許可）
 app.add_middleware(
@@ -48,8 +67,19 @@ app.add_middleware(
 )
 
 # 許可する画像MIMEタイプ
-ALLOWED_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
+ALLOWED_PHOTO_MIME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_PHOTO_SIZE = 20 * 1024 * 1024  # 20MB
+
+# 許可する書類MIMEタイプ
+ALLOWED_DOCUMENT_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "image/jpeg",
+    "image/png",
+}
+MAX_DOCUMENT_SIZE = 50 * 1024 * 1024  # 50MB
 
 
 # --- 機器マスター ---
@@ -77,7 +107,7 @@ def list_projects(
 
 
 @app.post("/api/projects", response_model=ProjectResponse)
-def create_project(body: ProjectCreate):
+def create_project(body: ProjectCreate, _user: Annotated[dict, Depends(get_current_user)]):
     """案件を新規作成する"""
     try:
         project = storage.create_project(
@@ -110,10 +140,9 @@ def get_project(project_id: str):
 
 
 @app.patch("/api/projects/{project_id}", response_model=ProjectResponse)
-def update_project(project_id: str, body: ProjectUpdate):
+def update_project(project_id: str, body: ProjectUpdate, _user: Annotated[dict, Depends(get_current_user)]):
     """案件データを部分更新する（ステータス、メモ等）"""
     updates = body.model_dump(exclude_none=True)
-    # ProjectStatus Enum を文字列に変換
     if "status" in updates and hasattr(updates["status"], "value"):
         updates["status"] = updates["status"].value
     project = storage.update_project(project_id, updates)
@@ -130,35 +159,31 @@ async def upload_photo(
     equipment_id: str = Form(...),
     slot_id: str = Form(...),
     file: UploadFile = File(...),
+    _user: Annotated[dict, Depends(get_current_user)] = None,
 ):
     """写真をアップロードする"""
-    # MIMEタイプ検証
-    if file.content_type not in ALLOWED_MIME_TYPES:
+    if file.content_type not in ALLOWED_PHOTO_MIME_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type: {file.content_type}. "
-                   f"Allowed: {', '.join(ALLOWED_MIME_TYPES)}",
+                   f"Allowed: {', '.join(ALLOWED_PHOTO_MIME_TYPES)}",
         )
 
-    # ファイルサイズ検証
     contents = await file.read()
-    if len(contents) > MAX_FILE_SIZE:
+    if len(contents) > MAX_PHOTO_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
+            detail=f"File too large. Maximum size: {MAX_PHOTO_SIZE // (1024*1024)}MB",
         )
-
     if len(contents) == 0:
         raise HTTPException(status_code=400, detail="Empty file")
 
-    # 画像リサイズ・圧縮
     try:
         processed = resize_image(contents)
     except Exception:
         logger.exception("Image processing failed")
         raise HTTPException(status_code=400, detail="Invalid image file")
 
-    # 保存
     try:
         result = storage.save_photo(
             project_id=project_id,
@@ -174,12 +199,140 @@ async def upload_photo(
 
 
 @app.delete("/api/projects/{project_id}/photos")
-def delete_photo(project_id: str, equipment_id: str, slot_id: str):
+def delete_photo(project_id: str, equipment_id: str, slot_id: str, _user: Annotated[dict, Depends(get_current_user)]):
     """写真を削除する"""
     deleted = storage.delete_photo(project_id, equipment_id, slot_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Photo not found")
     return {"status": "deleted"}
+
+
+@app.patch("/api/projects/{project_id}/photos/{equipment_id}/{slot_id}/retake",
+           response_model=ProjectResponse)
+def set_retake_instruction(
+    project_id: str,
+    equipment_id: str,
+    slot_id: str,
+    body: RetakeInstructionUpdate,
+    _user: Annotated[dict, Depends(require_admin)],
+):
+    """写真スロットへ再撮影指示をセット/解除する
+
+    reason が設定された場合は project.status を「図書修正待ち」へ更新する。
+    reason=null で指示解除。
+    """
+    project = storage.set_retake_instruction(
+        project_id=project_id,
+        equipment_id=equipment_id,
+        slot_id=slot_id,
+        reason=body.reason,
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project or slot not found")
+    return project
+
+
+# --- 書類 ---
+
+@app.get("/api/projects/{project_id}/documents", response_model=List[DocumentResponse])
+def list_documents(
+    project_id: str,
+    document_type: Optional[str] = Query(None, description="書類種別で絞り込み"),
+):
+    """案件の書類一覧を返す"""
+    project = storage.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return storage.list_documents(project_id, document_type=document_type)
+
+
+@app.post("/api/projects/{project_id}/documents", response_model=DocumentResponse)
+async def upload_document(
+    project_id: str,
+    document_type: str = Form(...),
+    file: UploadFile = File(...),
+    _user: Annotated[dict, Depends(get_current_user)] = None,
+):
+    """書類をアップロードする"""
+    # document_type バリデーション
+    valid_types = {e.value for e in DocumentType}
+    if document_type not in valid_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid document_type: {document_type}. Allowed: {', '.join(valid_types)}",
+        )
+
+    # MIMEタイプ検証（拡張子ベースでフォールバック）
+    content_type = file.content_type or ""
+    if content_type not in ALLOWED_DOCUMENT_MIME_TYPES:
+        # 拡張子でも判定
+        guessed, _ = mimetypes.guess_type(file.filename or "")
+        if guessed not in ALLOWED_DOCUMENT_MIME_TYPES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file type: {content_type}",
+            )
+
+    contents = await file.read()
+    if len(contents) > MAX_DOCUMENT_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Maximum size: {MAX_DOCUMENT_SIZE // (1024*1024)}MB",
+        )
+    if len(contents) == 0:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    try:
+        result = storage.save_document(
+            project_id=project_id,
+            document_type=document_type,
+            file_bytes=contents,
+            original_filename=file.filename or "document",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return result
+
+
+@app.delete("/api/projects/{project_id}/documents/{document_id}")
+def delete_document(project_id: str, document_id: str, _user: Annotated[dict, Depends(get_current_user)]):
+    """書類を削除する"""
+    deleted = storage.delete_document(project_id, document_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"status": "deleted"}
+
+
+@app.patch(
+    "/api/projects/{project_id}/documents/{document_id}/resubmit",
+    response_model=ProjectResponse,
+)
+def set_resubmit_instruction(
+    project_id: str,
+    document_id: str,
+    body: RetakeInstructionUpdate,
+    _user: Annotated[dict, Depends(require_admin)],
+):
+    """書類への再提出指示をセット/解除する"""
+    project = storage.set_resubmit_instruction(
+        project_id=project_id,
+        document_id=document_id,
+        reason=body.reason,
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project or document not found")
+    return project
+
+
+@app.get("/api/documents/{project_id}/{stored_filename}")
+def get_document(project_id: str, stored_filename: str):
+    """書類ファイルを返す"""
+    doc_path = storage.get_document_path(project_id, stored_filename)
+    if doc_path is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+    media_type, _ = mimetypes.guess_type(stored_filename)
+    return FileResponse(doc_path, media_type=media_type or "application/octet-stream")
 
 
 # --- バリデーション ---
@@ -229,3 +382,193 @@ def get_photo(filename: str):
     if photo_path is None:
         raise HTTPException(status_code=404, detail="Photo not found")
     return FileResponse(photo_path, media_type="image/jpeg")
+
+
+# --- Phase 4: 認証 ---
+
+@app.post("/api/auth/login", response_model=TokenResponse)
+def login(body: LoginRequest):
+    """ユーザーログイン → JWT トークンを返す"""
+    from auth import create_access_token
+    user = user_storage.authenticate_user(body.username, body.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_access_token({"sub": user["user_id"], "role": user["role"], "display_name": user["display_name"]})
+    return TokenResponse(access_token=token, role=user["role"], display_name=user["display_name"])
+
+
+@app.get("/api/auth/me", response_model=UserResponse)
+def get_me(current_user: Annotated[dict, Depends(get_current_user)]):
+    """現在のログインユーザー情報を返す"""
+    u = user_storage.get_user_by_username_or_id(current_user["sub"])
+    if u is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    return u
+
+
+# --- Phase 4: ユーザー管理 ---
+
+@app.get("/api/users", response_model=List[UserResponse])
+def list_users(_admin: Annotated[dict, Depends(require_admin)]):
+    """ユーザー一覧（管理者のみ）"""
+    return user_storage.list_users()
+
+
+@app.post("/api/users", response_model=UserResponse)
+def create_user(body: UserCreate, _admin: Annotated[dict, Depends(require_admin)]):
+    """ユーザー作成（管理者のみ）"""
+    if user_storage.get_user_by_username(body.username):
+        raise HTTPException(status_code=400, detail="Username already exists")
+    return user_storage.create_user(
+        username=body.username,
+        display_name=body.display_name,
+        password=body.password,
+        role=body.role.value,
+    )
+
+
+@app.delete("/api/users/{user_id}")
+def delete_user(user_id: str, admin: Annotated[dict, Depends(require_admin)]):
+    """ユーザー削除（管理者のみ、自分自身は不可）"""
+    if admin["sub"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    deleted = user_storage.delete_user(user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"status": "deleted"}
+
+
+@app.post("/api/users/import-csv", response_model=ImportResult)
+async def import_users_csv(file: UploadFile = File(...), _admin: Annotated[dict, Depends(require_admin)] = None):
+    """ユーザーCSVインポート（管理者のみ）
+    列: username, display_name, role, password
+    """
+    contents = await file.read()
+    reader = csv.DictReader(io.StringIO(contents.decode("utf-8-sig")))
+    created = 0
+    errors: list[str] = []
+    for i, row in enumerate(reader, start=2):
+        username = (row.get("username") or "").strip()
+        display_name = (row.get("display_name") or "").strip()
+        role = (row.get("role") or "worker").strip()
+        password = (row.get("password") or "").strip()
+        if not username or not display_name or not password:
+            errors.append(f"行 {i}: username/display_name/password は必須です")
+            continue
+        if role not in ("admin", "worker"):
+            errors.append(f"行 {i}: role は admin または worker のみ有効です")
+            continue
+        if user_storage.get_user_by_username(username):
+            errors.append(f"行 {i}: username '{username}' は既に存在します")
+            continue
+        user_storage.create_user(username=username, display_name=display_name, password=password, role=role)
+        created += 1
+    return ImportResult(created=created, errors=errors)
+
+
+# --- Phase 4: 案件承認・CSV ---
+
+@app.post("/api/projects/{project_id}/approve", response_model=ProjectResponse)
+def approve_project(project_id: str, _admin: Annotated[dict, Depends(require_admin)]):
+    """案件を承認し「案件終了」にする（管理者のみ）"""
+    project = storage.approve_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@app.post("/api/projects/import-csv", response_model=ImportResult)
+async def import_projects_csv(file: UploadFile = File(...), _admin: Annotated[dict, Depends(require_admin)] = None):
+    """案件CSVインポート（管理者のみ）
+    列: project_name, project_number, site_id, worker_name, address,
+        scheduled_date (YYYY-MM-DD), work_date (YYYY-MM-DD),
+        work_start_time (HH:MM), work_end_time (HH:MM),
+        equipment_ids (;区切り), memo, status
+    """
+    contents = await file.read()
+    reader = csv.DictReader(io.StringIO(contents.decode("utf-8-sig")))
+    created = 0
+    errors: list[str] = []
+    for i, row in enumerate(reader, start=2):
+        try:
+            site_id = (row.get("site_id") or "").strip()
+            worker_name = (row.get("worker_name") or "").strip()
+            work_date_str = (row.get("work_date") or "").strip()
+            if not site_id or not worker_name or not work_date_str:
+                errors.append(f"行 {i}: site_id/worker_name/work_date は必須です")
+                continue
+            work_date = date.fromisoformat(work_date_str)
+            equipment_ids_raw = (row.get("equipment_ids") or "").strip()
+            equipment_ids = [e.strip() for e in equipment_ids_raw.split(";") if e.strip()] if equipment_ids_raw else []
+            if not equipment_ids:
+                errors.append(f"行 {i}: equipment_ids は必須です（;区切り）")
+                continue
+
+            sched_raw = (row.get("scheduled_date") or "").strip()
+            scheduled_date = date.fromisoformat(sched_raw) if sched_raw else None
+
+            from datetime import datetime as dt
+            wst_raw = (row.get("work_start_time") or "").strip()
+            wet_raw = (row.get("work_end_time") or "").strip()
+            work_start_time = dt.fromisoformat(f"{work_date_str}T{wst_raw}") if wst_raw else None
+            work_end_time = dt.fromisoformat(f"{work_date_str}T{wet_raw}") if wet_raw else None
+
+            status = (row.get("status") or "対応前").strip() or "対応前"
+
+            storage.create_project(
+                site_id=site_id,
+                work_date=work_date,
+                worker_name=worker_name,
+                equipment_ids=equipment_ids,
+                project_name=(row.get("project_name") or "").strip() or None,
+                project_number=(row.get("project_number") or "").strip() or None,
+                address=(row.get("address") or "").strip() or None,
+                status=status,
+                memo=(row.get("memo") or "").strip() or None,
+                scheduled_date=scheduled_date,
+                work_start_time=work_start_time,
+                work_end_time=work_end_time,
+            )
+            created += 1
+        except Exception as exc:
+            errors.append(f"行 {i}: {exc}")
+    return ImportResult(created=created, errors=errors)
+
+
+@app.get("/api/projects/export-csv")
+def export_projects_csv(
+    status: Optional[str] = Query(None),
+    worker_name: Optional[str] = Query(None),
+    scheduled_date: Optional[str] = Query(None),
+    _admin: Annotated[dict, Depends(require_admin)] = None,
+):
+    """案件一覧をCSVエクスポート（管理者のみ）"""
+    projects = storage.list_projects(status=status, worker_name=worker_name, scheduled_date=scheduled_date)
+    output = io.StringIO()
+    fieldnames = [
+        "project_id", "project_name", "project_number", "site_id", "worker_name",
+        "address", "status", "scheduled_date", "work_date", "work_start_time",
+        "work_end_time", "departure_time", "arrival_time", "checkout_time",
+        "approved_at", "created_at", "memo", "equipment_count", "filled_slots", "total_slots",
+    ]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for p in projects:
+        total = sum(len(eq.get("slots", [])) for eq in p.get("equipment", []))
+        filled = sum(
+            1 for eq in p.get("equipment", [])
+            for sl in eq.get("slots", [])
+            if sl.get("photo_filename")
+        )
+        writer.writerow({
+            **{k: p.get(k, "") for k in fieldnames},
+            "equipment_count": len(p.get("equipment", [])),
+            "filled_slots": filled,
+            "total_slots": total,
+        })
+    csv_bytes = output.getvalue().encode("utf-8-sig")
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename*=UTF-8''projects.csv"},
+    )

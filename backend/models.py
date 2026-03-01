@@ -1,6 +1,6 @@
 """Pydantic データモデル
 
-案件・写真データの入出力モデルを定義する。
+案件・写真・書類データの入出力モデルを定義する。
 """
 
 from datetime import date, datetime
@@ -35,6 +35,19 @@ class ProjectStatus(str, Enum):
     統制移行 = "統制移行"
 
 
+# --- 書類 Enum ---
+
+class DocumentType(str, Enum):
+    依頼シート = "依頼シート"
+    ID通知書 = "ID通知書"
+    コンフィグ = "コンフィグ"
+    チェックリスト = "チェックリスト"
+    現地調査報告 = "現地調査報告"
+    完成図書_調査 = "完成図書_調査"
+    完成図書_設置 = "完成図書_設置"
+    その他 = "その他"
+
+
 # --- リクエストモデル ---
 
 class ProjectCreate(BaseModel):
@@ -67,6 +80,16 @@ class ProjectUpdate(BaseModel):
     work_end_time: Optional[datetime] = None
     scheduled_date: Optional[date] = None
     worker_name: Optional[str] = Field(None, max_length=100)
+    survey_notes: Optional[str] = None
+    # Phase 3 打刻フィールド
+    departure_time: Optional[datetime] = None
+    arrival_time: Optional[datetime] = None
+    checkout_time: Optional[datetime] = None
+
+
+class RetakeInstructionUpdate(BaseModel):
+    """再撮影指示の更新リクエスト（reason=None で解除）"""
+    reason: Optional[str] = Field(None, description="再撮影理由。Null で指示解除")
 
 
 # --- レスポンスモデル ---
@@ -77,6 +100,8 @@ class PhotoSlotResponse(BaseModel):
     label: str
     photo_filename: Optional[str] = None
     uploaded_at: Optional[datetime] = None
+    retake_instruction: Optional[str] = None
+    retake_requested_at: Optional[datetime] = None
 
 
 class EquipmentStatusResponse(BaseModel):
@@ -84,6 +109,19 @@ class EquipmentStatusResponse(BaseModel):
     equipment_id: str
     name: str
     slots: List[PhotoSlotResponse]
+
+
+class DocumentResponse(BaseModel):
+    """書類レスポンス"""
+    document_id: str
+    project_id: str
+    document_type: DocumentType
+    original_filename: str
+    stored_filename: str
+    size_bytes: int
+    uploaded_at: datetime
+    resubmit_instruction: Optional[str] = None
+    resubmit_requested_at: Optional[datetime] = None
 
 
 class ProjectResponse(BaseModel):
@@ -94,7 +132,7 @@ class ProjectResponse(BaseModel):
     worker_name: str
     created_at: datetime
     equipment: List[EquipmentStatusResponse]
-    # 拡張フィールド
+    # Phase 1 拡張フィールド
     project_name: Optional[str] = None
     project_number: Optional[str] = None
     address: Optional[str] = None
@@ -104,6 +142,15 @@ class ProjectResponse(BaseModel):
     work_start_time: Optional[datetime] = None
     work_end_time: Optional[datetime] = None
     scheduled_date: Optional[date] = None
+    # Phase 2 拡張フィールド
+    survey_notes: Optional[str] = None
+    documents: List[DocumentResponse] = []
+    # Phase 3 打刻フィールド
+    departure_time: Optional[datetime] = None
+    arrival_time: Optional[datetime] = None
+    checkout_time: Optional[datetime] = None
+    # Phase 4 承認フィールド
+    approved_at: Optional[datetime] = None
 
 
 class ValidationResult(BaseModel):
@@ -120,3 +167,42 @@ class PhotoUploadResponse(BaseModel):
     equipment_id: str
     slot_id: str
     uploaded_at: datetime
+
+
+# --- Phase 4 認証・ユーザー管理モデル ---
+
+class UserRole(str, Enum):
+    admin = "admin"
+    worker = "worker"
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: UserRole
+    display_name: str
+
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    display_name: str = Field(..., min_length=1, max_length=100)
+    password: str = Field(..., min_length=6)
+    role: UserRole = UserRole.worker
+
+
+class UserResponse(BaseModel):
+    user_id: str
+    username: str
+    display_name: str
+    role: UserRole
+    created_at: datetime
+
+
+class ImportResult(BaseModel):
+    created: int
+    errors: List[str]

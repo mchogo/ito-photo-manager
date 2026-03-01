@@ -17,6 +17,8 @@ export interface PhotoSlotStatus {
   label: string;
   photo_filename: string | null;
   uploaded_at: string | null;
+  retake_instruction: string | null;
+  retake_requested_at: string | null;
 }
 
 /** 機器ごとの撮影状態 */
@@ -96,6 +98,59 @@ export const STATUS_COLORS: Record<ProjectStatus, string> = {
   統制移行: "bg-slate-100 text-slate-700",
 };
 
+/** 書類種別 */
+export type DocumentType =
+  | "依頼シート"
+  | "ID通知書"
+  | "コンフィグ"
+  | "チェックリスト"
+  | "現地調査報告"
+  | "完成図書_調査"
+  | "完成図書_設置"
+  | "その他";
+
+export const DOCUMENT_TYPES: DocumentType[] = [
+  "依頼シート",
+  "ID通知書",
+  "コンフィグ",
+  "チェックリスト",
+  "現地調査報告",
+  "完成図書_調査",
+  "完成図書_設置",
+  "その他",
+];
+
+/** 書類カテゴリ */
+export const DOCUMENT_CATEGORIES = {
+  管理共有: ["依頼シート", "ID通知書", "コンフィグ", "チェックリスト"] as DocumentType[],
+  現地調査: ["現地調査報告", "完成図書_調査"] as DocumentType[],
+  設置: ["完成図書_設置"] as DocumentType[],
+};
+
+/** 書類データ */
+export interface ProjectDocument {
+  document_id: string;
+  project_id: string;
+  document_type: DocumentType;
+  original_filename: string;
+  stored_filename: string;
+  size_bytes: number;
+  uploaded_at: string;
+  resubmit_instruction: string | null;
+  resubmit_requested_at: string | null;
+}
+
+/** Phase 4 認証 */
+export type UserRole = "admin" | "worker";
+
+export interface AuthUser {
+  user_id: string;
+  username: string;
+  display_name: string;
+  role: UserRole;
+  created_at?: string;
+}
+
 /** 案件データ */
 export interface Project {
   project_id: string;
@@ -114,6 +169,15 @@ export interface Project {
   work_start_time: string | null;
   work_end_time: string | null;
   scheduled_date: string | null;
+  // Phase 2 拡張
+  survey_notes: string | null;
+  documents: ProjectDocument[];
+  // Phase 3 打刻
+  departure_time: string | null;
+  arrival_time: string | null;
+  checkout_time: string | null;
+  // Phase 4 承認
+  approved_at: string | null;
 }
 
 /** 案件更新リクエスト */
@@ -128,6 +192,10 @@ export interface ProjectUpdateRequest {
   work_end_time?: string | null;
   scheduled_date?: string | null;
   worker_name?: string;
+  survey_notes?: string | null;
+  departure_time?: string | null;
+  arrival_time?: string | null;
+  checkout_time?: string | null;
 }
 
 /** 案件一覧フィルター */
