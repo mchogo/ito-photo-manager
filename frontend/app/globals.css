@@ -1,0 +1,410 @@
+@import "tailwindcss";
+
+/* ============================================================
+   iOS Liquid Glass Design System
+   iOS 17/18 Control Center inspired glassmorphism
+   ============================================================ */
+
+/* === Core Animations === */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes elasticPop {
+  0%   { transform: scale(0.5); opacity: 0; }
+  60%  { transform: scale(1.05); }
+  80%  { transform: scale(0.97); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes blobFloat1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(30px, -40px) scale(1.05); }
+  66%      { transform: translate(-20px, 20px) scale(0.95); }
+}
+@keyframes blobFloat2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(-40px, 30px) scale(0.95); }
+  66%      { transform: translate(25px, -25px) scale(1.08); }
+}
+@keyframes blobFloat3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(20px, 35px) scale(1.03); }
+  66%      { transform: translate(-30px, -15px) scale(0.97); }
+}
+@keyframes progressShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(99, 102, 241, 0.3); }
+  50%      { box-shadow: 0 0 20px rgba(99, 102, 241, 0.6); }
+}
+@keyframes shimmer {
+  0%   { background-position: -300% 0; }
+  100% { background-position: 300% 0; }
+}
+@keyframes uploadPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.06); }
+}
+
+/* === Animation Utilities === */
+.animate-fade-in-up  { animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-fade-in     { animation: fadeIn 0.35s ease-out both; }
+.animate-slide-down  { animation: slideDown 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-elastic-pop { animation: elasticPop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-spin        { animation: spin 0.8s linear infinite; }
+
+/* Stagger children — smooth cascade */
+.stagger > * { animation: fadeInUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 60ms; }
+.stagger > *:nth-child(3)  { animation-delay: 120ms; }
+.stagger > *:nth-child(4)  { animation-delay: 180ms; }
+.stagger > *:nth-child(5)  { animation-delay: 240ms; }
+.stagger > *:nth-child(6)  { animation-delay: 300ms; }
+.stagger > *:nth-child(7)  { animation-delay: 360ms; }
+.stagger > *:nth-child(8)  { animation-delay: 420ms; }
+.stagger > *:nth-child(9)  { animation-delay: 480ms; }
+.stagger > *:nth-child(10) { animation-delay: 540ms; }
+
+/* ============================================================
+   Skeleton / Shimmer Loading
+   ============================================================ */
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.08) 25%,
+    rgba(255, 255, 255, 0.25) 50%,
+    rgba(255, 255, 255, 0.08) 75%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+.upload-pulse {
+  animation: uploadPulse 1.5s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+/* ============================================================
+   Liquid Glass Panels
+   ============================================================ */
+.liquid-glass {
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  /* inner glow — thin specular highlight */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.1),
+    0 8px 32px rgba(0, 0, 0, 0.06),
+    0 2px 8px rgba(0, 0, 0, 0.04);
+  border-radius: 20px;
+}
+
+/* deeper glass — for nested elements */
+.liquid-glass-deep {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+    0 4px 16px rgba(0, 0, 0, 0.05);
+  border-radius: 16px;
+}
+
+/* tinted glass variants */
+.liquid-glass-green {
+  background: rgba(16, 185, 129, 0.12);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+    0 4px 16px rgba(16, 185, 129, 0.08);
+  border-radius: 16px;
+}
+
+.liquid-glass-red {
+  background: rgba(239, 68, 68, 0.08);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+    0 4px 16px rgba(239, 68, 68, 0.06);
+  border-radius: 16px;
+}
+
+/* ============================================================
+   Elastic Buttons (liquid feel)
+   Unified :active tap feedback for all buttons
+   ============================================================ */
+.btn-liquid {
+  position: relative;
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  font-weight: 800;
+  color: #0f172a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease,
+              background 0.2s ease;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+    0 4px 14px rgba(0, 0, 0, 0.06);
+}
+.btn-liquid:hover {
+  transform: scale(1.02);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.6),
+    0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.btn-liquid:active {
+  transform: scale(0.95);
+  transition: transform 0.08s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+.btn-liquid-primary {
+  background: linear-gradient(135deg,
+    rgba(79, 70, 229, 0.92),
+    rgba(124, 58, 237, 0.92));
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+    0 6px 20px rgba(99, 102, 241, 0.4);
+}
+.btn-liquid-primary:hover {
+  transform: scale(1.02);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+    0 8px 28px rgba(99, 102, 241, 0.5);
+}
+.btn-liquid-primary:active {
+  transform: scale(0.95);
+  transition: transform 0.08s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-liquid-primary:disabled {
+  background: linear-gradient(135deg,
+    rgba(148, 163, 184, 0.5),
+    rgba(203, 213, 225, 0.5));
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.btn-liquid-success {
+  background: linear-gradient(135deg,
+    rgba(5, 150, 105, 0.92),
+    rgba(4, 120, 87, 0.92));
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.25s ease;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.35),
+    0 6px 20px rgba(16, 185, 129, 0.35);
+}
+.btn-liquid-success:hover {
+  transform: scale(1.02);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
+    0 8px 28px rgba(16, 185, 129, 0.45);
+}
+.btn-liquid-success:active {
+  transform: scale(0.95);
+  transition: transform 0.08s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-liquid-success:disabled {
+  background: linear-gradient(135deg,
+    rgba(148, 163, 184, 0.5),
+    rgba(203, 213, 225, 0.5));
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Small glass button — for slot-level actions */
+.btn-glass-sm {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 0.15s ease,
+              box-shadow 0.15s ease;
+}
+.btn-glass-sm:active {
+  transform: scale(0.93) !important;
+  transition: transform 0.06s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.btn-glass-sm:hover {
+  transform: scale(1.04);
+}
+
+/* ============================================================
+   Glass Input
+   ============================================================ */
+.input-glass {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
+}
+.input-glass:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.5),
+    0 0 0 4px rgba(99, 102, 241, 0.12);
+}
+.input-glass::placeholder {
+  color: rgba(71, 85, 105, 0.55);
+  font-weight: 500;
+}
+
+/* ============================================================
+   Loading Spinner
+   ============================================================ */
+.spinner-glass {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: rgba(99, 102, 241, 0.8);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* ============================================================
+   Progress Bar
+   ============================================================ */
+.progress-glass {
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.progress-glass-glow {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+/* ============================================================
+   Card Interaction (lift on hover)
+   ============================================================ */
+.card-liquid {
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease;
+}
+.card-liquid:hover {
+  transform: translateY(-2px) scale(1.01);
+}
+.card-liquid:active {
+  transform: scale(0.98);
+  transition: transform 0.08s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============================================================
+   Tap target — ensure minimum 44px hit area
+   ============================================================ */
+.tap-target {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ============================================================
+   Scrollbar (subtle)
+   ============================================================ */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.2); }
+
+/* ============================================================
+   Background & Body
+   ============================================================ */
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #eeeef3;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+
+/* Bottom bar — normal flow element, no overlap */
+.bottom-bar-glass {
+  margin-top: 24px;
+  padding: 16px 0 calc(16px + env(safe-area-inset-bottom));
+}
+
+/* === Floating background blobs === */
+.bg-blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  z-index: -1;
+  pointer-events: none;
+  will-change: transform;
+}
+.bg-blob-1 {
+  width: 420px; height: 420px;
+  background: radial-gradient(circle, #c7d2fe 0%, #ddd6fe 100%);
+  top: -80px; left: -60px;
+  animation: blobFloat1 18s ease-in-out infinite;
+}
+.bg-blob-2 {
+  width: 380px; height: 380px;
+  background: radial-gradient(circle, #fbcfe8 0%, #fecdd3 100%);
+  top: 30%; right: -80px;
+  animation: blobFloat2 22s ease-in-out infinite;
+}
+.bg-blob-3 {
+  width: 350px; height: 350px;
+  background: radial-gradient(circle, #a7f3d0 0%, #bae6fd 100%);
+  bottom: -60px; left: 20%;
+  animation: blobFloat3 20s ease-in-out infinite;
+}
