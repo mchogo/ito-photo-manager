@@ -28,30 +28,11 @@ export interface EquipmentStatus {
   slots: PhotoSlotStatus[];
 }
 
-/** 案件ステータス */
-export type ProjectStatus =
-  | "対応前"
-  | "客連絡待ち"
-  | "N連絡待ち"
-  | "調整完了"
-  | "Pコメ待ち"
-  | "再架電"
-  | "荷電待機中"
-  | "仮押さえ"
-  | "ファーストコール済み"
-  | "日程確定済み"
-  | "対応中"
-  | "案件終了"
-  | "対応不可"
-  | "未発注"
-  | "キャンセル"
-  | "杉本調整中"
-  | "成果物提出待ち"
-  | "図書提出待ち"
-  | "図書修正待ち"
-  | "統制移行";
+/** 案件ステータス（動的マスター管理対応のため plain string） */
+export type ProjectStatus = string;
 
-export const PROJECT_STATUSES: ProjectStatus[] = [
+/** フォールバック用静的ステータス一覧（useMasterConfig が未ロードの間に使用） */
+export const PROJECT_STATUSES: string[] = [
   "対応前",
   "客連絡待ち",
   "N連絡待ち",
@@ -74,28 +55,44 @@ export const PROJECT_STATUSES: ProjectStatus[] = [
   "統制移行",
 ];
 
-/** ステータスに対応するバッジカラー */
-export const STATUS_COLORS: Record<ProjectStatus, string> = {
-  対応前: "bg-gray-100 text-gray-600",
-  客連絡待ち: "bg-yellow-100 text-yellow-700",
-  N連絡待ち: "bg-orange-100 text-orange-700",
-  調整完了: "bg-green-100 text-green-700",
-  Pコメ待ち: "bg-blue-100 text-blue-700",
-  再架電: "bg-orange-100 text-orange-700",
-  荷電待機中: "bg-purple-100 text-purple-700",
-  仮押さえ: "bg-cyan-100 text-cyan-700",
-  ファーストコール済み: "bg-teal-100 text-teal-700",
-  日程確定済み: "bg-emerald-100 text-emerald-700",
-  対応中: "bg-indigo-100 text-indigo-700",
-  案件終了: "bg-gray-200 text-gray-500",
-  対応不可: "bg-red-100 text-red-700",
-  未発注: "bg-amber-100 text-amber-700",
-  キャンセル: "bg-red-200 text-red-800",
-  杉本調整中: "bg-violet-100 text-violet-700",
-  成果物提出待ち: "bg-sky-100 text-sky-700",
-  図書提出待ち: "bg-blue-100 text-blue-700",
-  図書修正待ち: "bg-rose-100 text-rose-700",
-  統制移行: "bg-slate-100 text-slate-700",
+/** 12色のプリセットパレット（Tailwind クラスを静的定義してパージ回避） */
+export const COLOR_PALETTE: Record<string, string> = {
+  gray:   "bg-gray-100 text-gray-600",
+  red:    "bg-red-100 text-red-700",
+  orange: "bg-orange-100 text-orange-700",
+  amber:  "bg-amber-100 text-amber-700",
+  yellow: "bg-yellow-100 text-yellow-700",
+  green:  "bg-green-100 text-green-700",
+  teal:   "bg-teal-100 text-teal-700",
+  cyan:   "bg-cyan-100 text-cyan-700",
+  blue:   "bg-blue-100 text-blue-700",
+  indigo: "bg-indigo-100 text-indigo-700",
+  violet: "bg-violet-100 text-violet-700",
+  rose:   "bg-rose-100 text-rose-700",
+};
+
+/** フォールバック用静的ステータスカラーマップ */
+export const STATUS_COLORS: Record<string, string> = {
+  対応前: COLOR_PALETTE.gray,
+  客連絡待ち: COLOR_PALETTE.yellow,
+  N連絡待ち: COLOR_PALETTE.orange,
+  調整完了: COLOR_PALETTE.green,
+  Pコメ待ち: COLOR_PALETTE.blue,
+  再架電: COLOR_PALETTE.orange,
+  荷電待機中: COLOR_PALETTE.violet,
+  仮押さえ: COLOR_PALETTE.cyan,
+  ファーストコール済み: COLOR_PALETTE.teal,
+  日程確定済み: COLOR_PALETTE.green,
+  対応中: COLOR_PALETTE.indigo,
+  案件終了: COLOR_PALETTE.gray,
+  対応不可: COLOR_PALETTE.red,
+  未発注: COLOR_PALETTE.amber,
+  キャンセル: COLOR_PALETTE.red,
+  杉本調整中: COLOR_PALETTE.violet,
+  成果物提出待ち: COLOR_PALETTE.blue,
+  図書提出待ち: COLOR_PALETTE.blue,
+  図書修正待ち: COLOR_PALETTE.rose,
+  統制移行: COLOR_PALETTE.gray,
 };
 
 /** 書類種別 */
@@ -120,12 +117,35 @@ export const DOCUMENT_TYPES: DocumentType[] = [
   "その他",
 ];
 
-/** 書類カテゴリ */
+/** 書類カテゴリ（静的フォールバック） */
 export const DOCUMENT_CATEGORIES = {
-  管理共有: ["依頼シート", "ID通知書", "コンフィグ", "チェックリスト"] as DocumentType[],
-  現地調査: ["現地調査報告", "完成図書_調査"] as DocumentType[],
-  設置: ["完成図書_設置"] as DocumentType[],
+  管理共有: ["依頼シート", "ID通知書", "コンフィグ", "チェックリスト"] as string[],
+  現地調査: ["現地調査報告", "完成図書_調査"] as string[],
+  設置: ["完成図書_設置"] as string[],
 };
+
+/** 書類カテゴリキー → 表示タイトル */
+export const DOCUMENT_CATEGORY_TITLES: Record<string, string> = {
+  管理共有: "統制からの資料",
+  現地調査: "現地調査",
+  設置: "設置",
+};
+
+/** マスター設定型（API レスポンス） */
+export interface MasterConfigStatus {
+  value: string;
+  color: string;
+}
+
+export interface MasterConfigDocType {
+  value: string;
+  category: "管理共有" | "現地調査" | "設置";
+}
+
+export interface MasterConfig {
+  statuses: MasterConfigStatus[];
+  document_types: MasterConfigDocType[];
+}
 
 /** 書類データ */
 export interface ProjectDocument {
@@ -176,6 +196,9 @@ export interface Project {
   departure_time: string | null;
   arrival_time: string | null;
   checkout_time: string | null;
+  departure_time_manual?: boolean;
+  arrival_time_manual?: boolean;
+  checkout_time_manual?: boolean;
   // Phase 4 承認
   approved_at: string | null;
 }

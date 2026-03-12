@@ -8,6 +8,7 @@ import EquipmentSelector from "@/components/EquipmentSelector";
 
 const LS_KEY_SITE_ID = "pm_siteId";
 const LS_KEY_WORKER = "pm_workerName";
+const LS_KEY_WORK_DATE = "pm_workDate";
 
 export default function HomePage() {
   const router = useRouter();
@@ -26,8 +27,10 @@ export default function HomePage() {
     try {
       const savedSiteId = localStorage.getItem(LS_KEY_SITE_ID);
       const savedWorker = localStorage.getItem(LS_KEY_WORKER);
+      const savedDate = localStorage.getItem(LS_KEY_WORK_DATE);
       if (savedSiteId) setSiteId(savedSiteId);
       if (savedWorker) setWorkerName(savedWorker);
+      if (savedDate) setWorkDate(savedDate);
     } catch {
       // localStorage unavailable — silently ignore
     }
@@ -42,6 +45,11 @@ export default function HomePage() {
   const handleWorkerNameChange = useCallback((value: string) => {
     setWorkerName(value);
     try { localStorage.setItem(LS_KEY_WORKER, value); } catch {}
+  }, []);
+
+  const handleWorkDateChange = useCallback((value: string) => {
+    setWorkDate(value);
+    try { localStorage.setItem(LS_KEY_WORK_DATE, value); } catch {}
   }, []);
 
   useEffect(() => {
@@ -138,7 +146,7 @@ export default function HomePage() {
           <label className="block text-[11px] font-bold text-gray-500/80 mb-1.5 uppercase tracking-widest">
             作業日 <span className="text-red-400">*</span>
           </label>
-          <input type="date" value={workDate} onChange={(e) => setWorkDate(e.target.value)}
+          <input type="date" value={workDate} onChange={(e) => handleWorkDateChange(e.target.value)}
             className="input-glass" />
         </div>
         <div>

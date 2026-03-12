@@ -1,11 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { login } from "@/lib/api";
+import { useAuth } from "@/lib/useAuth";
+import { getToken } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login } = useAuth();
+
+  // すでにログイン済みならダッシュボードへ
+  useEffect(() => {
+    if (getToken()) router.replace("/worker");
+  }, [router]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

@@ -5,34 +5,16 @@
 
 from datetime import date, datetime
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
-# --- ステータス Enum ---
+# --- ステータス（動的マスター管理対応のため plain str に変更） ---
 
-class ProjectStatus(str, Enum):
-    対応前 = "対応前"
-    客連絡待ち = "客連絡待ち"
-    N連絡待ち = "N連絡待ち"
-    調整完了 = "調整完了"
-    Pコメ待ち = "Pコメ待ち"
-    再架電 = "再架電"
-    荷電待機中 = "荷電待機中"
-    仮押さえ = "仮押さえ"
-    ファーストコール済み = "ファーストコール済み"
-    日程確定済み = "日程確定済み"
-    対応中 = "対応中"
-    案件終了 = "案件終了"
-    対応不可 = "対応不可"
-    未発注 = "未発注"
-    キャンセル = "キャンセル"
-    杉本調整中 = "杉本調整中"
-    成果物提出待ち = "成果物提出待ち"
-    図書提出待ち = "図書提出待ち"
-    図書修正待ち = "図書修正待ち"
-    統制移行 = "統制移行"
+# ProjectStatus は単純な文字列エイリアス。Pydantic の列挙バリデーションを廃止し、
+# master_config.json の内容を正として扱う。
+ProjectStatus = str
 
 
 # --- 書類 Enum ---
@@ -60,7 +42,7 @@ class ProjectCreate(BaseModel):
     project_name: Optional[str] = Field(None, max_length=200, description="案件名")
     project_number: Optional[str] = Field(None, max_length=100, description="案件番号")
     address: Optional[str] = Field(None, max_length=500, description="住所")
-    status: ProjectStatus = Field(ProjectStatus.対応前, description="ステータス")
+    status: ProjectStatus = Field("対応前", description="ステータス")
     memo: Optional[str] = Field(None, description="調整メモ")
     description: Optional[str] = Field(None, description="案件内容")
     work_start_time: Optional[datetime] = Field(None, description="作業開始時間")
@@ -90,6 +72,12 @@ class ProjectUpdate(BaseModel):
 class RetakeInstructionUpdate(BaseModel):
     """再撮影指示の更新リクエスト（reason=None で解除）"""
     reason: Optional[str] = Field(None, description="再撮影理由。Null で指示解除")
+
+
+class TimelogForceUpdate(BaseModel):
+    """管理者向け打刻強制更新リクエスト"""
+    field: Literal["departure_time", "arrival_time", "checkout_time"]
+    time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="HH:MM 形式の時刻")
 
 
 # --- レスポンスモデル ---
@@ -136,7 +124,7 @@ class ProjectResponse(BaseModel):
     project_name: Optional[str] = None
     project_number: Optional[str] = None
     address: Optional[str] = None
-    status: ProjectStatus = ProjectStatus.対応前
+    status: ProjectStatus = "対応前"
     memo: Optional[str] = None
     description: Optional[str] = None
     work_start_time: Optional[datetime] = None
@@ -149,6 +137,9 @@ class ProjectResponse(BaseModel):
     departure_time: Optional[datetime] = None
     arrival_time: Optional[datetime] = None
     checkout_time: Optional[datetime] = None
+    departure_time_manual: bool = False
+    arrival_time_manual: bool = False
+    checkout_time_manual: bool = False
     # Phase 4 承認フィールド
     approved_at: Optional[datetime] = None
 
@@ -206,3 +197,23 @@ class UserResponse(BaseModel):
 class ImportResult(BaseModel):
     created: int
     errors: List[str]
+
+
+# --- マスター設定モデル ---
+
+class MasterConfigStatus(BaseModel):
+    """ステータス定義"""
+    value: str = Field(..., min_length=1, max_length=50)
+    color: str = Field("gray", description="パレットキー (gray/red/blue...)")
+
+
+class MasterConfigDocType(BaseModel):
+    """書類種別定義"""
+    value: str = Field(..., min_length=1, max_length=100)
+    category: Literal["管理共有", "現地調査", "設置"]
+
+
+class MasterConfig(BaseModel):
+    """マスター設定全体"""
+    statuses: List[MasterConfigStatus]
+    document_types: List[MasterConfigDocType]

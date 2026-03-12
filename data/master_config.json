@@ -1,0 +1,118 @@
+{
+  "statuses": [
+    {
+      "value": "対応前",
+      "color": "gray"
+    },
+    {
+      "value": "客連絡待ち",
+      "color": "yellow"
+    },
+    {
+      "value": "N連絡待ち",
+      "color": "orange"
+    },
+    {
+      "value": "調整完了",
+      "color": "green"
+    },
+    {
+      "value": "Pコメ待ち",
+      "color": "blue"
+    },
+    {
+      "value": "再架電",
+      "color": "orange"
+    },
+    {
+      "value": "荷電待機中",
+      "color": "violet"
+    },
+    {
+      "value": "仮押さえ",
+      "color": "cyan"
+    },
+    {
+      "value": "ファーストコール済み",
+      "color": "teal"
+    },
+    {
+      "value": "日程確定済み",
+      "color": "green"
+    },
+    {
+      "value": "対応中",
+      "color": "indigo"
+    },
+    {
+      "value": "案件終了",
+      "color": "gray"
+    },
+    {
+      "value": "対応不可",
+      "color": "red"
+    },
+    {
+      "value": "未発注",
+      "color": "amber"
+    },
+    {
+      "value": "キャンセル",
+      "color": "red"
+    },
+    {
+      "value": "杉本調整中",
+      "color": "violet"
+    },
+    {
+      "value": "成果物提出待ち",
+      "color": "blue"
+    },
+    {
+      "value": "図書提出待ち",
+      "color": "blue"
+    },
+    {
+      "value": "図書修正待ち",
+      "color": "rose"
+    },
+    {
+      "value": "統制移行",
+      "color": "gray"
+    }
+  ],
+  "document_types": [
+    {
+      "value": "依頼シート",
+      "category": "管理共有"
+    },
+    {
+      "value": "ID通知書",
+      "category": "管理共有"
+    },
+    {
+      "value": "コンフィグ",
+      "category": "管理共有"
+    },
+    {
+      "value": "チェックリスト",
+      "category": "管理共有"
+    },
+    {
+      "value": "現地調査報告",
+      "category": "現地調査"
+    },
+    {
+      "value": "完成図書_調査",
+      "category": "現地調査"
+    },
+    {
+      "value": "完成図書_設置",
+      "category": "設置"
+    },
+    {
+      "value": "その他",
+      "category": "管理共有"
+    }
+  ]
+}

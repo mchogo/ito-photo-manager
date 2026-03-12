@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
 import equipment_master
+import master_config as mc
 import storage
 import user_storage
 from auth import get_current_user, require_admin
@@ -28,11 +29,15 @@ from models import (
     DocumentType,
     ImportResult,
     LoginRequest,
+    MasterConfig,
+    MasterConfigDocType,
+    MasterConfigStatus,
     PhotoUploadResponse,
     ProjectCreate,
     ProjectResponse,
     ProjectUpdate,
     RetakeInstructionUpdate,
+    TimelogForceUpdate,
     TokenResponse,
     UserCreate,
     UserResponse,
@@ -97,6 +102,7 @@ def list_projects(
     status: Optional[str] = Query(None, description="ステータスで絞り込み"),
     worker_name: Optional[str] = Query(None, description="作業員名で絞り込み"),
     scheduled_date: Optional[str] = Query(None, description="予定日（YYYY-MM-DD）で絞り込み"),
+    _user: Annotated[dict, Depends(get_current_user)] = None,
 ):
     """案件一覧を返す（フィルタリング対応）"""
     return storage.list_projects(
@@ -118,7 +124,7 @@ def create_project(body: ProjectCreate, _user: Annotated[dict, Depends(get_curre
             project_name=body.project_name,
             project_number=body.project_number,
             address=body.address,
-            status=body.status.value,
+            status=body.status,
             memo=body.memo,
             description=body.description,
             work_start_time=body.work_start_time,
@@ -131,7 +137,7 @@ def create_project(body: ProjectCreate, _user: Annotated[dict, Depends(get_curre
 
 
 @app.get("/api/projects/{project_id}", response_model=ProjectResponse)
-def get_project(project_id: str):
+def get_project(project_id: str, _user: Annotated[dict, Depends(get_current_user)] = None):
     """案件データを取得する"""
     project = storage.get_project(project_id)
     if project is None:
@@ -143,8 +149,6 @@ def get_project(project_id: str):
 def update_project(project_id: str, body: ProjectUpdate, _user: Annotated[dict, Depends(get_current_user)]):
     """案件データを部分更新する（ステータス、メモ等）"""
     updates = body.model_dump(exclude_none=True)
-    if "status" in updates and hasattr(updates["status"], "value"):
-        updates["status"] = updates["status"].value
     project = storage.update_project(project_id, updates)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -325,8 +329,26 @@ def set_resubmit_instruction(
     return project
 
 
+@app.patch("/api/projects/{project_id}/timelog", response_model=ProjectResponse)
+def force_update_timelog(
+    project_id: str,
+    data: TimelogForceUpdate,
+    _admin: Annotated[dict, Depends(require_admin)],
+):
+    """打刻を強制上書き（管理者のみ）。手動修正フラグを記録する"""
+    project = storage.get_project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    work_date = project.get("work_date", "")
+    iso_time = f"{work_date}T{data.time}:00"
+    updated = storage.force_update_timelog(project_id, data.field, iso_time)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return updated
+
+
 @app.get("/api/documents/{project_id}/{stored_filename}")
-def get_document(project_id: str, stored_filename: str):
+def get_document(project_id: str, stored_filename: str, _user: Annotated[dict, Depends(get_current_user)] = None):
     """書類ファイルを返す"""
     doc_path = storage.get_document_path(project_id, stored_filename)
     if doc_path is None:
@@ -338,7 +360,7 @@ def get_document(project_id: str, stored_filename: str):
 # --- バリデーション ---
 
 @app.get("/api/projects/{project_id}/validate", response_model=ValidationResult)
-def validate_project(project_id: str):
+def validate_project(project_id: str, _user: Annotated[dict, Depends(get_current_user)] = None):
     """案件の撮影完了状態を検証する"""
     try:
         result = storage.validate_project(project_id)
@@ -350,11 +372,20 @@ def validate_project(project_id: str):
 # --- Excel出力 ---
 
 @app.get("/api/projects/{project_id}/export")
-def export_excel(project_id: str):
+def export_excel(project_id: str, _user: Annotated[dict, Depends(get_current_user)] = None):
     """案件のExcel報告書を生成してダウンロードする"""
     project = storage.get_project(project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+
+    # 未撮影スロットが残っている場合はサーバー側で拒否
+    validation = storage.validate_project(project_id)
+    if not validation["is_complete"]:
+        missing = validation["total_slots"] - validation["filled_slots"]
+        raise HTTPException(
+            status_code=400,
+            detail=f"撮影が未完了です。残り {missing} スロットが未撮影です。",
+        )
 
     try:
         excel_bytes = generate_excel(project, storage.PHOTOS_DIR)
@@ -376,7 +407,7 @@ def export_excel(project_id: str):
 # --- 写真ファイル配信 ---
 
 @app.get("/api/photos/{filename}")
-def get_photo(filename: str):
+def get_photo(filename: str, _user: Annotated[dict, Depends(get_current_user)] = None):
     """写真ファイルを返す"""
     photo_path = storage.get_photo_path(filename)
     if photo_path is None:
@@ -572,3 +603,35 @@ def export_projects_csv(
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename*=UTF-8''projects.csv"},
     )
+
+
+# --- マスター設定 ---
+
+@app.get("/api/master-config", response_model=MasterConfig)
+def get_master_config(_user: Annotated[dict, Depends(get_current_user)]):
+    """ステータス・書類種別のマスター設定を取得する（認証済みユーザー）"""
+    return mc.load_config()
+
+
+@app.put("/api/admin/master-config/statuses", response_model=MasterConfig)
+def update_statuses(
+    statuses: list[MasterConfigStatus],
+    _admin: Annotated[dict, Depends(require_admin)],
+):
+    """ステータス一覧を更新する（管理者のみ）"""
+    config = mc.load_config()
+    config["statuses"] = [s.model_dump() for s in statuses]
+    mc.save_config(config)
+    return config
+
+
+@app.put("/api/admin/master-config/document-types", response_model=MasterConfig)
+def update_document_types(
+    document_types: list[MasterConfigDocType],
+    _admin: Annotated[dict, Depends(require_admin)],
+):
+    """書類種別一覧を更新する（管理者のみ）"""
+    config = mc.load_config()
+    config["document_types"] = [d.model_dump() for d in document_types]
+    mc.save_config(config)
+    return config

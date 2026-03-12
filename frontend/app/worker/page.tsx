@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { listProjects } from "@/lib/api";
 import type { Project, ProjectStatus } from "@/types";
-import { PROJECT_STATUSES, STATUS_COLORS } from "@/types";
+import { useMasterConfig } from "@/lib/useMasterConfig";
 
 const LS_KEY_WORKER = "pm_workerName";
 
@@ -37,6 +37,7 @@ function PhotoProgress({ project }: { project: Project }) {
 }
 
 export default function WorkerPage() {
+  const { config, colorOf } = useMasterConfig();
   const [workerName, setWorkerName] = useState("");
   const [inputValue, setInputValue] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
@@ -117,8 +118,8 @@ export default function WorkerPage() {
           className="input-glass w-full"
         >
           <option value="">すべてのステータス</option>
-          {PROJECT_STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
+          {config.statuses.map((s) => (
+            <option key={s.value} value={s.value}>{s.value}</option>
           ))}
         </select>
       </div>
@@ -163,9 +164,7 @@ export default function WorkerPage() {
                     )}
                   </div>
                   <span
-                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
-                      STATUS_COLORS[project.status] ?? "bg-gray-100 text-gray-600"
-                    }`}
+                    className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${colorOf(project.status)}`}
                   >
                     {project.status}
                   </span>

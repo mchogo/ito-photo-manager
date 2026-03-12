@@ -210,6 +210,24 @@ def update_project(project_id: str, updates: dict) -> dict | None:
     return project
 
 
+def force_update_timelog(
+    project_id: str,
+    field: str,
+    iso_time: str,
+) -> dict | None:
+    """管理者向け打刻強制更新（既存値も上書き可能）。手動修正フラグを立てる"""
+    if field not in _TIMELOG_FIELDS:
+        raise ValueError(f"Invalid timelog field: {field}")
+    project = get_project(project_id)
+    if project is None:
+        return None
+    project[field] = iso_time
+    project[f"{field}_manual"] = True
+    _save_project(project)
+    logger.info("Timelog force-updated: %s, field: %s", project_id, field)
+    return project
+
+
 # --- 写真 ---
 
 def save_photo(
@@ -251,9 +269,7 @@ def save_photo(
 
     now = datetime.now()
     timestamp = now.strftime("%Y%m%d_%H%M%S_%f")
-    ext = Path(original_filename).suffix.lower()
-    if ext not in (".jpg", ".jpeg", ".png", ".webp"):
-        ext = ".jpg"
+    ext = ".jpg"  # resize_image() 出力は常に JPEG; 拡張子を .jpg に統一
     safe_eq_name = target_eq["name"].replace(" ", "_").replace("/", "_")
     safe_site_id = project["site_id"].replace(" ", "_").replace("/", "_")
     filename = f"{safe_eq_name}_{safe_site_id}_{timestamp}{ext}"

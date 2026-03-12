@@ -4,8 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { approveProject, downloadExportCSV, importProjectsCSV, listProjects } from "@/lib/api";
 import type { Project } from "@/types";
-import { STATUS_COLORS } from "@/types";
 import { useRequireAuth } from "@/lib/useAuth";
+import { useMasterConfig } from "@/lib/useMasterConfig";
 
 type DateTab = "today" | "tomorrow";
 
@@ -39,6 +39,7 @@ function getAlerts(p: Project): string[] {
 
 export default function AdminPage() {
   const { isAdmin } = useRequireAuth();
+  const { colorOf } = useMasterConfig();
   const [tab, setTab] = useState<DateTab>("today");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
@@ -145,21 +146,28 @@ export default function AdminPage() {
           <Link
             href="/admin/users"
             className="text-xs font-bold px-3 py-1.5 rounded-xl"
-            style={{ border: "1px solid rgba(0,0,0,0.1)", color: "rgba(75,85,99,0.8)" }}
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-secondary)" }}
           >
             👥 ユーザー管理
+          </Link>
+          <Link
+            href="/admin/settings"
+            className="text-xs font-bold px-3 py-1.5 rounded-xl"
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-secondary)" }}
+          >
+            ⚙️ マスター設定
           </Link>
           <button
             onClick={handleExport}
             className="text-xs font-bold px-3 py-1.5 rounded-xl"
-            style={{ border: "1px solid rgba(0,0,0,0.1)", color: "rgba(75,85,99,0.8)" }}
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-secondary)" }}
           >
             ↓ CSV出力
           </button>
           <button
             onClick={() => importRef.current?.click()}
             className="text-xs font-bold px-3 py-1.5 rounded-xl"
-            style={{ border: "1px solid rgba(0,0,0,0.1)", color: "rgba(75,85,99,0.8)" }}
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-secondary)" }}
           >
             ↑ CSV入力
           </button>
@@ -177,8 +185,8 @@ export default function AdminPage() {
       <div
         className="flex rounded-2xl p-1 gap-1"
         style={{
-          background: "rgba(255,255,255,0.35)",
-          border: "1px solid rgba(255,255,255,0.5)",
+          background: "var(--c-tab-bg)",
+          border: "1px solid var(--c-tab-border)",
           backdropFilter: "blur(12px)",
         }}
       >
@@ -194,7 +202,7 @@ export default function AdminPage() {
                     color: "white",
                     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 8px rgba(99,102,241,0.3)",
                   }
-                : { color: "rgba(75,85,99,0.8)" }
+                : { color: "var(--c-text-secondary)" }
             }
           >
             {label}
@@ -251,7 +259,7 @@ export default function AdminPage() {
                   <div className="flex items-center justify-between">
                     <p className="font-bold text-gray-800 text-[15px] truncate">{name}</p>
                     <span
-                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 ml-2 ${STATUS_COLORS[p.status] ?? "bg-gray-100 text-gray-600"}`}
+                      className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full shrink-0 ml-2 ${colorOf(p.status)}`}
                     >
                       {p.status}
                     </span>
@@ -267,7 +275,7 @@ export default function AdminPage() {
                 {/* Timelog summary */}
                 <div
                   className="grid grid-cols-3 gap-2 rounded-xl p-2.5 text-[11px] font-medium text-gray-600"
-                  style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.05)" }}
+                  style={{ background: "var(--c-surface-subtle)", border: "1px solid var(--c-border-subtle)" }}
                 >
                   <div className="text-center">
                     <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">出発</div>

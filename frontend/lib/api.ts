@@ -1,6 +1,9 @@
 import type {
   AuthUser,
   EquipmentDef,
+  MasterConfig,
+  MasterConfigDocType,
+  MasterConfigStatus,
   Project,
   ProjectDocument,
   ProjectListFilter,
@@ -21,7 +24,10 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, { ...init, headers });
   if (res.status === 401) {
     clearToken();
-    if (typeof window !== "undefined") window.location.href = "/login";
+    // /login 上では無限リロードを防ぐためリダイレクトしない
+    if (typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
     throw new Error("Unauthorized");
   }
   if (!res.ok) {
@@ -190,6 +196,19 @@ export function getDocumentUrl(projectId: string, storedFilename: string): strin
   return `${API_BASE}/documents/${projectId}/${encodeURIComponent(storedFilename)}`;
 }
 
+/** 打刻を管理者権限で強制上書き（HH:MM 形式で指定） */
+export async function forceUpdateTimelog(
+  projectId: string,
+  field: "departure_time" | "arrival_time" | "checkout_time",
+  time: string,
+): Promise<Project> {
+  return fetchJSON<Project>(`/projects/${projectId}/timelog`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ field, time }),
+  });
+}
+
 /** 書類への再提出指示をセット/解除（reason=null で解除） */
 export async function setResubmitInstruction(
   projectId: string,
@@ -297,4 +316,29 @@ export async function downloadExportCSV(filters?: ProjectListFilter): Promise<vo
   a.download = "projects.csv";
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// --- マスター設定 ---
+
+/** ステータス・書類種別のマスター設定を取得 */
+export async function getMasterConfig(): Promise<MasterConfig> {
+  return fetchJSON<MasterConfig>("/master-config");
+}
+
+/** ステータス一覧を更新（管理者のみ） */
+export async function updateStatuses(statuses: MasterConfigStatus[]): Promise<MasterConfig> {
+  return fetchJSON<MasterConfig>("/admin/master-config/statuses", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(statuses),
+  });
+}
+
+/** 書類種別一覧を更新（管理者のみ） */
+export async function updateDocumentTypes(docTypes: MasterConfigDocType[]): Promise<MasterConfig> {
+  return fetchJSON<MasterConfig>("/admin/master-config/document-types", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(docTypes),
+  });
 }

@@ -47,16 +47,35 @@ function ShootPageContent() {
     loadProject();
   }, [loadProject]);
 
-  // Warn on browser back / tab close while shooting is in progress
+  const WARN_MSG =
+    "作業を中断してトップに戻りますか？現在のセッション内容は失われます（提出した写真は保存されています）";
+
+  // 未完了セッション時のみ離脱警告（beforeunload + ブラウザバック）
   useEffect(() => {
+    if (totalCount === 0 || filledCount >= totalCount) return;
+
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (project && totalCount > 0) {
-        e.preventDefault();
+      e.preventDefault();
+    };
+
+    // ブラウザバック割り込み用にダミー履歴をプッシュ
+    history.pushState(null, "", window.location.href);
+    const handlePopState = () => {
+      if (confirm(WARN_MSG)) {
+        router.push("/");
+      } else {
+        // キャンセル: インターセプターを再武装
+        history.pushState(null, "", window.location.href);
       }
     };
+
     window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [project, totalCount]);
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [filledCount, totalCount, router]);
 
   if (!projectId) {
     return (
@@ -96,7 +115,7 @@ function ShootPageContent() {
   const percent = totalCount > 0 ? Math.round((filledCount / totalCount) * 100) : 0;
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
+    <div className="space-y-5 animate-fade-in-up pb-28">
       {/* Status Bar — Glass Panel */}
       <div className="liquid-glass p-5">
         <div className="flex items-center justify-between mb-4">

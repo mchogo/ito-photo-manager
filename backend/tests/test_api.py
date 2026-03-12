@@ -1,8 +1,6 @@
 """FastAPI 統合テスト"""
 
 import io
-from datetime import date
-from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -10,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import storage
+from auth import get_current_user, require_admin
 from main import app
 
 
@@ -27,7 +26,15 @@ def temp_data_dir(tmp_path):
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    """認証済みテストクライアント（依存関係をモックで上書き）"""
+    def mock_user():
+        return {"sub": "test-admin", "role": "admin", "display_name": "テスト管理者"}
+
+    app.dependency_overrides[get_current_user] = mock_user
+    app.dependency_overrides[require_admin] = mock_user
+    tc = TestClient(app)
+    yield tc
+    app.dependency_overrides.clear()
 
 
 def _make_jpeg() -> bytes:
@@ -184,6 +191,14 @@ class TestExcelExportAPI:
             "equipment_ids": ["lan_cabling"],
         })
         pid = res.json()["project_id"]
+        # exportはサーバー側で撮影完了を必須とするため、全スロットを先にアップロード
+        jpeg = _make_jpeg()
+        for slot_id in ["lan_overview", "lan_point"]:
+            client.post(
+                f"/api/projects/{pid}/photos",
+                data={"equipment_id": "lan_cabling", "slot_id": slot_id},
+                files={"file": ("test.jpg", jpeg, "image/jpeg")},
+            )
         export_res = client.get(f"/api/projects/{pid}/export")
         assert export_res.status_code == 200
         assert "spreadsheetml" in export_res.headers["content-type"]

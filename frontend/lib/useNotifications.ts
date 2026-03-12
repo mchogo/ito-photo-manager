@@ -80,8 +80,10 @@ export function useNotifications() {
   const refresh = useCallback(async () => {
     try {
       const user = getStoredUser();
-      const isAdmin = user?.role === "admin";
-      const workerName = user?.display_name ?? localStorage.getItem("pm_workerName") ?? undefined;
+      // 未ログイン時はスキップ（認証必須エンドポイントへの不要なリクエストを防ぐ）
+      if (!user) return;
+      const isAdmin = user.role === "admin";
+      const workerName = user.display_name ?? localStorage.getItem("pm_workerName") ?? undefined;
       const filters = isAdmin || !workerName ? {} : { worker_name: workerName };
       const projects = await listProjects(filters);
       setNotifications(computeNotifications(projects));

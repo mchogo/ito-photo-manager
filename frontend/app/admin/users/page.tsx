@@ -66,6 +66,17 @@ export default function UsersPage() {
     }
   };
 
+  const downloadTemplate = () => {
+    const csv = "username,display_name,role,password\nworker01,山田 太郎,worker,password123\nadmin01,管理者,admin,password123\n";
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "users_template.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -96,13 +107,22 @@ export default function UsersPage() {
           <h2 className="text-2xl font-extrabold text-gray-800 tracking-tight">ユーザー管理</h2>
           <p className="text-sm text-gray-500/70 mt-1 font-medium">作業員・管理者アカウントの管理</p>
         </div>
-        <button
-          onClick={() => importRef.current?.click()}
-          className="text-xs font-bold px-3 py-1.5 rounded-xl"
-          style={{ border: "1px solid rgba(0,0,0,0.1)", color: "rgba(75,85,99,0.8)" }}
-        >
-          ↑ CSV入力
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={downloadTemplate}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl"
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-secondary)" }}
+          >
+            ↓ フォーマット
+          </button>
+          <button
+            onClick={() => importRef.current?.click()}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl"
+            style={{ border: "1px solid var(--c-border)", color: "var(--c-text-secondary)" }}
+          >
+            ↑ CSV入力
+          </button>
+        </div>
         <input ref={importRef} type="file" accept=".csv" className="hidden" onChange={handleImport} />
       </div>
 
@@ -194,7 +214,7 @@ export default function UsersPage() {
             <thead>
               <tr
                 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider"
-                style={{ borderBottom: "1px solid rgba(0,0,0,0.06)" }}
+                style={{ borderBottom: "1px solid var(--c-border-subtle)" }}
               >
                 <th className="px-4 py-3 text-left">表示名</th>
                 <th className="px-4 py-3 text-left">ユーザー名</th>
@@ -208,7 +228,7 @@ export default function UsersPage() {
                 <tr
                   key={u.user_id}
                   className="font-medium text-gray-700"
-                  style={{ borderBottom: "1px solid rgba(0,0,0,0.04)" }}
+                  style={{ borderBottom: "1px solid var(--c-border-subtle)" }}
                 >
                   <td className="px-4 py-3">
                     {u.display_name}

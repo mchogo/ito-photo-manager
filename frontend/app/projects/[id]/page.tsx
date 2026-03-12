@@ -12,6 +12,7 @@ import {
   deleteDocument,
   getDocumentUrl,
   setResubmitInstruction,
+  forceUpdateTimelog,
 } from "@/lib/api";
 import type {
   Project,
@@ -20,16 +21,17 @@ import type {
   ProjectUpdateRequest,
   ValidationResult,
 } from "@/types";
-import { PROJECT_STATUSES, STATUS_COLORS, DOCUMENT_CATEGORIES } from "@/types";
+import { DOCUMENT_CATEGORY_TITLES } from "@/types";
 import { useAdminMode } from "@/lib/useAdminMode";
+import { useMasterConfig } from "@/lib/useMasterConfig";
 
 type Tab = "info" | "shoot" | "docs";
 
 // --- Sub-components ---
 
-function StatusBadge({ status }: { status: ProjectStatus }) {
+function StatusBadge({ status, colorClass }: { status: ProjectStatus; colorClass?: string }) {
   return (
-    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600"}`}>
+    <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${colorClass ?? "bg-gray-100 text-gray-600"}`}>
       {status}
     </span>
   );
@@ -57,24 +59,70 @@ const TIMELOG_ACTIONS = [
   { field: "checkout_time" as const,  label: "退店", emoji: "🏁", color: "249,115,22" },
 ] as const;
 
+type TimelogField = "departure_time" | "arrival_time" | "checkout_time";
+
 function TimelogSection({
   project,
   onUpdate,
+  onProjectUpdated,
 }: {
   project: Project;
   onUpdate: (updates: ProjectUpdateRequest) => Promise<void>;
+  onProjectUpdated: (project: Project) => void;
 }) {
-  const [loading, setLoading] = useState<string | null>(null);
+  const [isAdmin] = useAdminMode();
+  const [loading, setLoading] = useState<TimelogField | null>(null);
+  // Pre-stamp picker state (all users)
+  const [pendingField, setPendingField] = useState<TimelogField | null>(null);
+  const [pendingTime, setPendingTime] = useState("");
+  // Admin edit picker state
+  const [editingField, setEditingField] = useState<TimelogField | null>(null);
+  const [editingTime, setEditingTime] = useState("");
 
-  const stamp = async (field: "departure_time" | "arrival_time" | "checkout_time") => {
-    if (project[field]) return;
-    setLoading(field);
+  const nowHHMM = () => {
+    const d = new Date();
+    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  };
+
+  const handleButtonClick = (field: TimelogField, recorded: string | null) => {
+    if (recorded) {
+      if (!isAdmin) return;
+      const hhmm = recorded.match(/T(\d{2}:\d{2})/)?.[1] ?? recorded.slice(11, 16);
+      setEditingField(field);
+      setEditingTime(hhmm);
+      setPendingField(null);
+    } else {
+      setPendingField(field);
+      setPendingTime(nowHHMM());
+      setEditingField(null);
+    }
+  };
+
+  const handleStampConfirm = async () => {
+    if (!pendingField) return;
+    setLoading(pendingField);
     try {
-      await onUpdate({ [field]: new Date().toISOString() });
+      await onUpdate({ [pendingField]: `${project.work_date}T${pendingTime}:00` });
+      setPendingField(null);
     } finally {
       setLoading(null);
     }
   };
+
+  const handleEditConfirm = async () => {
+    if (!editingField) return;
+    setLoading(editingField);
+    try {
+      const updated = await forceUpdateTimelog(project.project_id, editingField, editingTime);
+      onProjectUpdated(updated);
+      setEditingField(null);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const activeField = pendingField ?? editingField;
+  const isEditing = editingField !== null;
 
   return (
     <div className="liquid-glass p-4 space-y-3">
@@ -82,39 +130,97 @@ function TimelogSection({
       <div className="grid grid-cols-3 gap-2">
         {TIMELOG_ACTIONS.map(({ field, label, emoji, color }) => {
           const recorded = project[field] ?? null;
+          const isActive = activeField === field;
           const isLoading = loading === field;
+          const isManual =
+            field === "departure_time" ? project.departure_time_manual
+            : field === "arrival_time" ? project.arrival_time_manual
+            : project.checkout_time_manual;
           const hhmm = recorded
             ? recorded.match(/T(\d{2}:\d{2})/)?.[1] ?? recorded.slice(11, 16)
             : null;
           return (
             <button
               key={field}
-              disabled={!!recorded || isLoading}
-              onClick={() => stamp(field)}
+              disabled={(!recorded && isLoading) || (!!recorded && !isAdmin)}
+              onClick={() => handleButtonClick(field, recorded)}
               className="flex flex-col items-center gap-1 py-3 rounded-2xl text-xs font-bold transition-all"
               style={
                 recorded
                   ? {
                       background: `rgba(${color},0.08)`,
-                      border: `1px solid rgba(${color},0.3)`,
+                      border: `1px solid rgba(${color},${isActive ? "0.6" : "0.3"})`,
                       color: `rgba(${color},0.8)`,
-                      cursor: "default",
+                      cursor: isAdmin ? "pointer" : "default",
+                      boxShadow: isActive ? `0 0 0 2px rgba(${color},0.25)` : "none",
                     }
                   : {
-                      background: `linear-gradient(135deg, rgba(${color},0.12), rgba(${color},0.07))`,
-                      border: `1px solid rgba(${color},0.2)`,
+                      background: isActive
+                        ? `rgba(${color},0.15)`
+                        : `linear-gradient(135deg, rgba(${color},0.12), rgba(${color},0.07))`,
+                      border: `1px solid rgba(${color},${isActive ? "0.4" : "0.2"})`,
                       color: `rgba(${color},0.9)`,
+                      boxShadow: isActive ? `0 0 0 2px rgba(${color},0.2)` : "none",
                     }
               }
             >
               <span className="text-lg">{emoji}</span>
               <span>{label}</span>
-              {hhmm && <span className="text-[10px] font-medium opacity-75">{hhmm}</span>}
+              {hhmm ? (
+                <span className="text-[10px] font-medium opacity-75">
+                  {hhmm}{isAdmin && " ✎"}
+                </span>
+              ) : null}
+              {isManual && (
+                <span className="text-[9px] font-bold opacity-50">手動修正</span>
+              )}
               {isLoading && <span className="text-[10px] opacity-50">送信中...</span>}
             </button>
           );
         })}
       </div>
+
+      {/* Inline time picker — appears when pre-stamp or admin edit is active */}
+      {activeField && (
+        <div
+          className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+          style={{ background: "rgba(0,0,0,0.03)", border: "1px solid rgba(0,0,0,0.06)" }}
+        >
+          <span className="text-sm shrink-0">
+            {TIMELOG_ACTIONS.find((a) => a.field === activeField)?.emoji}
+          </span>
+          <span className="text-xs font-bold text-gray-600 shrink-0">
+            {TIMELOG_ACTIONS.find((a) => a.field === activeField)?.label}
+            {isEditing && (
+              <span className="ml-1 text-[10px] text-amber-600 font-bold">修正</span>
+            )}
+          </span>
+          <input
+            type="time"
+            value={isEditing ? editingTime : pendingTime}
+            onChange={(e) =>
+              isEditing ? setEditingTime(e.target.value) : setPendingTime(e.target.value)
+            }
+            className="input-glass flex-1 text-sm py-1"
+          />
+          <button
+            onClick={isEditing ? handleEditConfirm : handleStampConfirm}
+            disabled={loading !== null}
+            className="text-xs font-bold px-3 py-1.5 rounded-xl text-white disabled:opacity-50 shrink-0"
+            style={{
+              background: "linear-gradient(135deg, rgba(99,102,241,0.85), rgba(139,92,246,0.85))",
+            }}
+          >
+            {isEditing ? "更新" : "打刻"}
+          </button>
+          <button
+            onClick={() => { setPendingField(null); setEditingField(null); }}
+            className="text-xs text-gray-400 hover:text-gray-600 px-1 shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -124,9 +230,13 @@ function TimelogSection({
 function InfoTab({
   project,
   onUpdate,
+  onProjectUpdated,
+  statuses,
 }: {
   project: Project;
   onUpdate: (updates: ProjectUpdateRequest) => Promise<void>;
+  onProjectUpdated: (project: Project) => void;
+  statuses: string[];
 }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -164,7 +274,7 @@ function InfoTab({
       </div>
 
       {/* 打刻 */}
-      <TimelogSection project={project} onUpdate={onUpdate} />
+      <TimelogSection project={project} onUpdate={onUpdate} onProjectUpdated={onProjectUpdated} />
 
       {/* Status */}
       <div className="liquid-glass p-4 space-y-3">
@@ -174,7 +284,7 @@ function InfoTab({
           onChange={(e) => handleStatusChange(e.target.value as ProjectStatus)}
           className="input-glass w-full"
         >
-          {PROJECT_STATUSES.map((s) => (
+          {statuses.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
@@ -816,10 +926,12 @@ function DocsTab({
   project,
   onUpdate,
   onProjectUpdated,
+  docTypesByCategory,
 }: {
   project: Project;
   onUpdate: (updates: ProjectUpdateRequest) => Promise<void>;
   onProjectUpdated: (p: Project) => void;
+  docTypesByCategory: (cat: "管理共有" | "現地調査" | "設置") => string[];
 }) {
   const [isAdmin] = useAdminMode();
   const [surveyNotes, setSurveyNotes] = useState(project.survey_notes ?? "");
@@ -841,7 +953,7 @@ function DocsTab({
       {/* Section 1: 統制からの資料 */}
       <DocSection
         title="統制からの資料"
-        docTypes={DOCUMENT_CATEGORIES["管理共有"]}
+        docTypes={docTypesByCategory("管理共有")}
         project={project}
         isAdmin={isAdmin}
         onProjectUpdated={onProjectUpdated}
@@ -850,7 +962,7 @@ function DocsTab({
       {/* Section 2: 現地調査 */}
       <DocSection
         title="現地調査"
-        docTypes={DOCUMENT_CATEGORIES["現地調査"]}
+        docTypes={docTypesByCategory("現地調査")}
         project={project}
         isAdmin={isAdmin}
         onProjectUpdated={onProjectUpdated}
@@ -875,7 +987,7 @@ function DocsTab({
       {/* Section 3: 設置 */}
       <DocSection
         title="設置"
-        docTypes={DOCUMENT_CATEGORIES["設置"]}
+        docTypes={docTypesByCategory("設置")}
         project={project}
         isAdmin={isAdmin}
         onProjectUpdated={onProjectUpdated}
@@ -898,6 +1010,7 @@ export default function ProjectDetailPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.id as string;
+  const { colorOf, config, docTypesByCategory } = useMasterConfig();
 
   const [project, setProject] = useState<Project | null>(null);
   const [validation, setValidation] = useState<ValidationResult | null>(null);
@@ -966,7 +1079,7 @@ export default function ProjectDetailPage() {
             {project.project_name || project.site_id}
           </h2>
           <div className="flex items-center gap-2 mt-1">
-            <StatusBadge status={project.status} />
+            <StatusBadge status={project.status} colorClass={colorOf(project.status)} />
             {project.project_number && (
               <span className="text-xs text-gray-400 font-medium">#{project.project_number}</span>
             )}
@@ -978,9 +1091,8 @@ export default function ProjectDetailPage() {
       <div
         className="flex rounded-2xl p-1 gap-1"
         style={{
-          background: "rgba(255,255,255,0.35)",
-          border: "1px solid rgba(255,255,255,0.5)",
-          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)",
+          background: "var(--c-tab-bg)",
+          border: "1px solid var(--c-tab-border)",
           backdropFilter: "blur(12px)",
         }}
       >
@@ -996,7 +1108,7 @@ export default function ProjectDetailPage() {
                     color: "white",
                     boxShadow: "inset 0 1px 0 rgba(255,255,255,0.3), 0 2px 8px rgba(99,102,241,0.3)",
                   }
-                : { color: "rgba(75,85,99,0.8)" }
+                : { color: "var(--c-text-secondary)" }
             }
           >
             <span className="mr-1">{icon}</span>
@@ -1006,12 +1118,24 @@ export default function ProjectDetailPage() {
       </div>
 
       {/* Tab content */}
-      {tab === "info" && <InfoTab project={project} onUpdate={handleUpdate} />}
+      {tab === "info" && (
+        <InfoTab
+          project={project}
+          onUpdate={handleUpdate}
+          onProjectUpdated={setProject}
+          statuses={config.statuses.map((s) => s.value)}
+        />
+      )}
       {tab === "shoot" && (
         <ShootTab project={project} validation={validation} onProjectUpdated={setProject} />
       )}
       {tab === "docs" && (
-        <DocsTab project={project} onUpdate={handleUpdate} onProjectUpdated={setProject} />
+        <DocsTab
+          project={project}
+          onUpdate={handleUpdate}
+          onProjectUpdated={setProject}
+          docTypesByCategory={docTypesByCategory}
+        />
       )}
     </div>
   );
