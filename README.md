@@ -41,6 +41,27 @@ bash scripts/setup-maintenance.sh
 bash scripts/setup-maintenance.sh --clean
 ```
 
+### Codex Cloud の「環境セットアップスクリプト」設定例
+
+Codex Cloud 側の Environment Setup Script には、次のコマンドを指定してください。
+
+```bash
+# 通常セットアップ
+bash -lc './setup_codex_cloud_env.sh'
+
+# メンテナンスセットアップ（テスト/ビルド確認を含む）
+bash -lc './setup_codex_cloud_env.sh maintenance'
+
+# メンテナンス + 依存再構築
+bash -lc './setup_codex_cloud_env.sh maintenance-clean'
+```
+
+`setup_codex_cloud_env.sh` はモードに応じて以下を呼び出します。
+
+- `setup`（デフォルト）: `scripts/setup.sh`
+- `maintenance`: `scripts/setup-maintenance.sh`
+- `maintenance-clean`: `scripts/setup-maintenance.sh --clean`
+
 ### 1. バックエンド（FastAPI）
 
 ```bash
