@@ -28,6 +28,19 @@
 - Node.js 18以上
 - npm
 
+### 0. 環境セットアップスクリプト（推奨）
+
+```bash
+# 開発用セットアップ
+bash scripts/setup.sh
+
+# メンテナンス用（依存再構築 + テスト/ビルド確認）
+bash scripts/setup-maintenance.sh
+
+# 依存を入れ直す場合
+bash scripts/setup-maintenance.sh --clean
+```
+
 ### 1. バックエンド（FastAPI）
 
 ```bash
