@@ -1,17 +1,59 @@
-# Runtime data
+# === Node (frontend) ===
+node_modules/
+.next/
+out/
+build/
+*.tsbuildinfo
+next-env.d.ts
+
+# === E2E (Playwright) ===
+e2e/playwright-report/
+e2e/test-results/
+e2e/.auth/
+.playwright-cli/
+
+# === Python (backend) ===
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+venv/
+.venv/
+env/
+.Python
+.mypy_cache/
+.ruff_cache/
+
+# === Testing & Coverage ===
+coverage/
+.coverage
+coverage.xml
+.pytest_cache/
+htmlcov/
+
+# === Env / Secrets ===
+.env
+.env.*
+*.pem
+!.env*.sample
+
+# === Logs ===
+*.log
+logs/
+
+# === Editor / OS trash ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
+
+# === npm cache (local workaround) ===
+.npm-cache/
+
+# === Runtime data ===
 data/projects/
 data/photos/
-
-# Python
-__pycache__/
-*.pyc
-.pytest_cache/
-
-# Node.js
-frontend/node_modules/
-frontend/.next/
-
-# OS
-.DS_Store
-venv/
-frontend/tsconfig.tsbuildinfo

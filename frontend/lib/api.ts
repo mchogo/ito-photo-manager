@@ -31,8 +31,17 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error("Unauthorized");
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`API Error ${res.status}: ${body}`);
+    const text = await res.text();
+    let errMessage = text;
+    try {
+      const data = JSON.parse(text);
+      if (data.detail && typeof data.detail === "object" && data.detail.message) {
+        errMessage = data.detail.message;
+      } else if (data.detail) {
+        errMessage = String(data.detail);
+      }
+    } catch {}
+    throw new Error(errMessage);
   }
   return res.json();
 }

@@ -1,171 +1,101 @@
-# いとうさんフォトマネージャー
+# いとうさんフォトマネージャー (ito-photo-manager)
 
-現場でのPOSレジ・通信機器の撮影漏れを防止し、提出用Excelの作成を自動化するWebアプリケーション。
+## 概要
+撮影写真・書類等の管理を一元化する業務アプリケーションです。
+現場での撮影報告、書類アップロード、Excel 出力、ユーザー管理などの機能を提供します。
 
-## 機能
-
-- **機器選択**: チェックボックスで導入機器を選択すると、必要な撮影項目が自動生成される
-- **撮影ナビ**: カード形式で撮影スロットを表示。未撮影=赤、完了=緑で一目で状況把握
-- **バリデーション**: 全撮影項目が埋まるまでExcel出力を防止
-- **Excel報告書自動生成**: 写真をセルに埋め込んだExcelファイルをワンクリックでダウンロード
-- **画像自動圧縮**: アップロード時に自動リサイズ・JPEG圧縮（EXIF回転補正対応）
-
-## 対応機器（マスターデータ）
-
-| 機器名 | 撮影項目 |
+## 技術スタック
+| レイヤー | 技術 |
 |---|---|
-| POSレジ本体 | 正面, 背面, シリアル番号（3枚） |
-| キャッシュドロア | 全体, 接続部（2枚） |
-| レシートプリンタ | 正面, シリアル番号（2枚） |
-| ルーター | 正面, 接続・配線（2枚） |
-| LAN配線 | 全体俯瞰, 接続ポイント（2枚） |
+| Frontend | Next.js 15 (App Router), React 19, TailwindCSS |
+| Backend | FastAPI, Pydantic v2 |
+| テスト | Pytest (Backend), Playwright (E2E) |
+| Linter | Ruff (Python), ESLint (Frontend) |
+| CI | GitHub Actions (`ci-pr.yml`) |
+
+## ディレクトリ構成
+
+```
+ito-photo-manager/
+├── backend/              # FastAPI バックエンド
+│   ├── main.py           # エントリーポイント
+│   ├── models.py         # Pydantic モデル
+│   ├── storage.py        # ファイルストレージ
+│   ├── auth.py           # JWT 認証
+│   ├── tests/            # Pytest テスト群
+│   ├── requirements.txt
+│   ├── pytest.ini
+│   └── .ruff.toml
+├── frontend/             # Next.js フロントエンド
+│   ├── app/              # App Router ページ群
+│   ├── components/       # UI コンポーネント
+│   └── lib/api.ts        # API クライアント (共通ラッパー)
+├── e2e/                  # Playwright E2E テスト
+│   ├── tests/
+│   └── playwright.config.ts
+├── data/                 # ランタイムデータ (gitignore 対象)
+├── docs/
+│   ├── coding-standards/ # コーディング規約
+│   └── feature_requests/ # 機能要望
+├── .github/workflows/    # GitHub Actions CI
+├── Makefile              # 開発コマンド一元管理
+├── AGENTS.md             # AI エージェント向けガイドライン
+├── start.sh              # 開発用起動スクリプト
+└── start-prod.sh         # 本番用起動スクリプト
+```
 
 ## セットアップ手順
 
 ### 前提条件
-
-- Python 3.9以上
-- Node.js 18以上
+- Python 3.13+
+- Node.js 22+
 - npm
 
-### 0. 環境セットアップスクリプト（推奨）
+### インストール
 
 ```bash
-# 開発用セットアップ
-bash scripts/setup.sh
+# 全体の依存関係をインストール
+make install
 
-# メンテナンス用（依存再構築 + テスト/ビルド確認）
-bash scripts/setup-maintenance.sh
-
-# 依存を入れ直す場合
-bash scripts/setup-maintenance.sh --clean
+# 個別にインストールする場合
+make install TARGET=backend    # pip install -r requirements.txt
+make install TARGET=frontend   # npm install
+make install TARGET=e2e        # npm install + playwright install
 ```
 
-### Codex Cloud の「環境セットアップスクリプト」設定例
-
-Codex Cloud 側の Environment Setup Script には、次のコマンドを指定してください。
+### 起動
 
 ```bash
-# 通常セットアップ
-bash -lc './setup_codex_cloud_env.sh'
+# フロントエンド・バックエンドを同時起動 (開発用)
+make run
 
-# メンテナンスセットアップ（テスト/ビルド確認を含む）
-bash -lc './setup_codex_cloud_env.sh maintenance'
-
-# メンテナンス + 依存再構築
-bash -lc './setup_codex_cloud_env.sh maintenance-clean'
+# 本番用起動
+./start-prod.sh
 ```
 
-`setup_codex_cloud_env.sh` はモードに応じて以下を呼び出します。
+バックエンド: `http://localhost:8000`
+フロントエンド: `http://localhost:3000`
 
-- `setup`（デフォルト）: `scripts/setup.sh`
-- `maintenance`: `scripts/setup-maintenance.sh`
-- `maintenance-clean`: `scripts/setup-maintenance.sh --clean`
+## テスト・バリデーション
 
-### 1. バックエンド（FastAPI）
+PR 作成前には必ず以下を実行してください:
 
 ```bash
-cd backend
+# 全体チェック (Ruff lint + Pytest + ESLint + TypeScript)
+make check
 
-# 依存パッケージのインストール
-pip install -r requirements.txt
+# バックエンドのみ
+make check TARGET=backend
 
-# サーバー起動（ポート8000）
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# フロントエンドのみ
+make check TARGET=frontend
+
+# E2E テスト (要: フロントエンド・バックエンド起動状態)
+make e2e
 ```
 
-### 2. フロントエンド（Next.js）
-
-```bash
-cd frontend
-
-# 依存パッケージのインストール
-npm install
-
-# 開発サーバー起動（ポート3000）
-npm run dev
-```
-
-### 3. アクセス
-
-ブラウザで http://localhost:3000 を開く。
-
-> フロントエンドの `next.config.ts` で `/api/*` へのリクエストが自動的にバックエンド（ポート8000）にプロキシされます。
-
-## テスト実行
-
-```bash
-cd backend
-python -m pytest tests/ -v
-```
-
-## 使い方
-
-1. トップ画面で **現場ID**、**作業日**、**作業員名** を入力
-2. 導入する **機器をチェック** して「撮影開始」をタップ
-3. 撮影ナビ画面で各スロットの **「カメラ」** または **「ファイル選択」** で写真を登録
-4. 全スロットが緑になったら **「プレビュー / 提出へ」** をタップ
-5. プレビュー画面で内容を確認し、**「Excel出力」** でExcelファイルをダウンロード
-
-## プロジェクト構成
-
-```
-ito-photo-manager/
-├── backend/                   # Python FastAPI バックエンド
-│   ├── main.py                # APIエントリポイント
-│   ├── models.py              # Pydanticモデル
-│   ├── equipment_master.py    # 機器マスター定義
-│   ├── storage.py             # ローカルファイルストレージ
-│   ├── excel_export.py        # Excel生成（openpyxl）
-│   ├── image_utils.py         # 画像リサイズ・圧縮（Pillow）
-│   ├── requirements.txt
-│   └── tests/                 # pytest テスト（41件）
-├── frontend/                  # Next.js フロントエンド
-│   ├── app/                   # App Router ページ
-│   │   ├── page.tsx           # 案件作成 + 機器選択
-│   │   ├── shoot/page.tsx     # 撮影ナビ
-│   │   └── preview/page.tsx   # プレビュー / 提出
-│   ├── components/            # UIコンポーネント
-│   ├── lib/api.ts             # APIクライアント
-│   └── types/index.ts         # TypeScript型定義
-├── data/                      # ランタイムデータ（自動生成）
-│   ├── projects/              # 案件JSON
-│   └── photos/                # 写真ファイル
-└── README.md
-```
-
-## 主要な設計判断
-
-### 技術スタック
-- **Next.js (App Router)** + **FastAPI**: リッチなUIとPython Excel処理を両立
-- **ローカルファイルストレージ**: セットアップ不要で即動作。後からクラウド連携を追加可能
-
-### 写真ファイル名
-- `{機器名}_{現場ID}_{YYYYMMDD_HHMMSS_ffffff}.jpg` 形式
-- 目視でも判別可能な命名規則（仕様書準拠）
-
-### バリデーション
-- **APIレベル**: `/validate` エンドポイントで未撮影スロットを返却
-- **UIレベル**: 未撮影がある場合、プレビューボタン/Excel出力ボタンを無効化し警告表示
-
-### 画像処理
-- アップロード時に最大幅800pxにリサイズ + JPEG品質85%で圧縮
-- Excel埋め込み時はさらに300pxにリサイズ
-- EXIF回転情報を適用（スマホ写真の向き補正）
-
-### Excel出力
-- openpyxlでゼロからワークブックを生成
-- ヘッダに案件情報、機器ごとにセクション分け、各スロットに画像を埋め込み
-
-## API一覧
-
-| Method | Path | 説明 |
-|---|---|---|
-| GET | `/api/equipment` | 機器マスター一覧 |
-| POST | `/api/projects` | 案件作成 |
-| GET | `/api/projects/{id}` | 案件データ取得 |
-| POST | `/api/projects/{id}/photos` | 写真アップロード |
-| DELETE | `/api/projects/{id}/photos` | 写真削除 |
-| GET | `/api/projects/{id}/validate` | バリデーション |
-| GET | `/api/projects/{id}/export` | Excel出力 |
-| GET | `/api/photos/{filename}` | 写真ファイル配信 |
+## 開発ガイドライン
+- [AI エージェント向けガイドライン (AGENTS.md)](./AGENTS.md)
+- [基本的なコーディング規約](./docs/coding-standards/基本的なコーディング規約.md)
+- [FastAPI エンドポイント設計ポリシー](./docs/coding-standards/FastAPIエンドポイント設計ポリシー.md)
+- [フロントエンドでの API の叩き方](./docs/coding-standards/フロントエンドでのAPIの叩き方.md)

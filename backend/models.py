@@ -7,7 +7,15 @@ from datetime import date, datetime
 from enum import Enum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
+
+
+# --- 共通エラーレスポンス ---
+
+class ErrorResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    code: str = Field(..., description="エラーコード")
+    message: str = Field(..., description="ユーザ表示メッセージ")
 
 
 # --- ステータス（動的マスター管理対応のため plain str に変更） ---
@@ -34,6 +42,7 @@ class DocumentType(str, Enum):
 
 class ProjectCreate(BaseModel):
     """案件作成リクエスト"""
+    model_config = ConfigDict(extra="forbid")
     site_id: str = Field(..., min_length=1, max_length=100, description="現場ID")
     work_date: date = Field(..., description="作業日")
     worker_name: str = Field(..., min_length=1, max_length=100, description="作業員名")
@@ -52,6 +61,7 @@ class ProjectCreate(BaseModel):
 
 class ProjectUpdate(BaseModel):
     """案件更新リクエスト（部分更新）"""
+    model_config = ConfigDict(extra="forbid")
     project_name: Optional[str] = Field(None, max_length=200)
     project_number: Optional[str] = Field(None, max_length=100)
     address: Optional[str] = Field(None, max_length=500)
@@ -71,11 +81,13 @@ class ProjectUpdate(BaseModel):
 
 class RetakeInstructionUpdate(BaseModel):
     """再撮影指示の更新リクエスト（reason=None で解除）"""
+    model_config = ConfigDict(extra="forbid")
     reason: Optional[str] = Field(None, description="再撮影理由。Null で指示解除")
 
 
 class TimelogForceUpdate(BaseModel):
     """管理者向け打刻強制更新リクエスト"""
+    model_config = ConfigDict(extra="forbid")
     field: Literal["departure_time", "arrival_time", "checkout_time"]
     time: str = Field(..., pattern=r"^\d{2}:\d{2}$", description="HH:MM 形式の時刻")
 
@@ -84,6 +96,7 @@ class TimelogForceUpdate(BaseModel):
 
 class PhotoSlotResponse(BaseModel):
     """撮影スロットの状態"""
+    model_config = ConfigDict(extra="forbid")
     slot_id: str
     label: str
     photo_filename: Optional[str] = None
@@ -94,6 +107,7 @@ class PhotoSlotResponse(BaseModel):
 
 class EquipmentStatusResponse(BaseModel):
     """機器ごとの撮影状態"""
+    model_config = ConfigDict(extra="forbid")
     equipment_id: str
     name: str
     slots: List[PhotoSlotResponse]
@@ -101,6 +115,7 @@ class EquipmentStatusResponse(BaseModel):
 
 class DocumentResponse(BaseModel):
     """書類レスポンス"""
+    model_config = ConfigDict(extra="forbid")
     document_id: str
     project_id: str
     document_type: DocumentType
@@ -114,6 +129,7 @@ class DocumentResponse(BaseModel):
 
 class ProjectResponse(BaseModel):
     """案件レスポンス"""
+    model_config = ConfigDict(extra="forbid")
     project_id: str
     site_id: str
     work_date: date
@@ -146,6 +162,7 @@ class ProjectResponse(BaseModel):
 
 class ValidationResult(BaseModel):
     """バリデーション結果"""
+    model_config = ConfigDict(extra="forbid", strict=True)
     is_complete: bool
     missing_slots: List[dict]  # [{"equipment_name": ..., "slot_label": ...}]
     total_slots: int
@@ -154,6 +171,7 @@ class ValidationResult(BaseModel):
 
 class PhotoUploadResponse(BaseModel):
     """写真アップロードレスポンス"""
+    model_config = ConfigDict(extra="forbid")
     filename: str
     equipment_id: str
     slot_id: str
@@ -168,11 +186,13 @@ class UserRole(str, Enum):
 
 
 class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     username: str
     password: str
 
 
 class TokenResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     access_token: str
     token_type: str = "bearer"
     role: UserRole
@@ -180,6 +200,7 @@ class TokenResponse(BaseModel):
 
 
 class UserCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     username: str = Field(..., min_length=1, max_length=50)
     display_name: str = Field(..., min_length=1, max_length=100)
     password: str = Field(..., min_length=6)
@@ -187,6 +208,7 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     user_id: str
     username: str
     display_name: str
@@ -195,6 +217,7 @@ class UserResponse(BaseModel):
 
 
 class ImportResult(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
     created: int
     errors: List[str]
 
@@ -203,17 +226,20 @@ class ImportResult(BaseModel):
 
 class MasterConfigStatus(BaseModel):
     """ステータス定義"""
+    model_config = ConfigDict(extra="forbid", strict=True)
     value: str = Field(..., min_length=1, max_length=50)
     color: str = Field("gray", description="パレットキー (gray/red/blue...)")
 
 
 class MasterConfigDocType(BaseModel):
     """書類種別定義"""
+    model_config = ConfigDict(extra="forbid", strict=True)
     value: str = Field(..., min_length=1, max_length=100)
     category: Literal["管理共有", "現地調査", "設置"]
 
 
 class MasterConfig(BaseModel):
     """マスター設定全体"""
+    model_config = ConfigDict(extra="forbid", strict=True)
     statuses: List[MasterConfigStatus]
     document_types: List[MasterConfigDocType]

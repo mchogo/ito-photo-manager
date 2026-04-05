@@ -132,7 +132,7 @@ def create_project(body: ProjectCreate, _user: Annotated[dict, Depends(get_curre
             scheduled_date=body.scheduled_date,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": str(e)})
     return project
 
 
@@ -141,7 +141,7 @@ def get_project(project_id: str, _user: Annotated[dict, Depends(get_current_user
     """案件データを取得する"""
     project = storage.get_project(project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
     return project
 
 
@@ -151,7 +151,7 @@ def update_project(project_id: str, body: ProjectUpdate, _user: Annotated[dict, 
     updates = body.model_dump(exclude_none=True)
     project = storage.update_project(project_id, updates)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
     return project
 
 
@@ -169,24 +169,27 @@ async def upload_photo(
     if file.content_type not in ALLOWED_PHOTO_MIME_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type: {file.content_type}. "
-                   f"Allowed: {', '.join(ALLOWED_PHOTO_MIME_TYPES)}",
+            detail={"code": "UNSUPPORTED_MEDIA_TYPE", "message": f"Unsupported file type: {file.content_type}. "
+                   f"Allowed: {', '.join(ALLOWED_PHOTO_MIME_TYPES)}"},
         )
 
     contents = await file.read()
     if len(contents) > MAX_PHOTO_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size: {MAX_PHOTO_SIZE // (1024*1024)}MB",
+            detail={
+                "code": "PAYLOAD_TOO_LARGE",
+                "message": f"File too large. Maximum size: {MAX_PHOTO_SIZE // (1024*1024)}MB",
+            },
         )
     if len(contents) == 0:
-        raise HTTPException(status_code=400, detail="Empty file")
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Empty file"})
 
     try:
         processed = resize_image(contents)
     except Exception:
         logger.exception("Image processing failed")
-        raise HTTPException(status_code=400, detail="Invalid image file")
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Invalid image file"})
 
     try:
         result = storage.save_photo(
@@ -197,7 +200,7 @@ async def upload_photo(
             original_filename=file.filename or "photo.jpg",
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": str(e)})
 
     return result
 
@@ -207,7 +210,7 @@ def delete_photo(project_id: str, equipment_id: str, slot_id: str, _user: Annota
     """写真を削除する"""
     deleted = storage.delete_photo(project_id, equipment_id, slot_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Photo not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Photo not found"})
     return {"status": "deleted"}
 
 
@@ -232,7 +235,7 @@ def set_retake_instruction(
         reason=body.reason,
     )
     if project is None:
-        raise HTTPException(status_code=404, detail="Project or slot not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project or slot not found"})
     return project
 
 
@@ -246,7 +249,7 @@ def list_documents(
     """案件の書類一覧を返す"""
     project = storage.get_project(project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
     return storage.list_documents(project_id, document_type=document_type)
 
 
@@ -263,7 +266,10 @@ async def upload_document(
     if document_type not in valid_types:
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid document_type: {document_type}. Allowed: {', '.join(valid_types)}",
+            detail={
+                "code": "BAD_REQUEST",
+                "message": f"Invalid document_type: {document_type}. Allowed: {', '.join(valid_types)}",
+            },
         )
 
     # MIMEタイプ検証（拡張子ベースでフォールバック）
@@ -274,17 +280,20 @@ async def upload_document(
         if guessed not in ALLOWED_DOCUMENT_MIME_TYPES:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported file type: {content_type}",
+                detail={"code": "UNSUPPORTED_MEDIA_TYPE", "message": f"Unsupported file type: {content_type}"},
             )
 
     contents = await file.read()
     if len(contents) > MAX_DOCUMENT_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"File too large. Maximum size: {MAX_DOCUMENT_SIZE // (1024*1024)}MB",
+            detail={
+                "code": "PAYLOAD_TOO_LARGE",
+                "message": f"File too large. Maximum size: {MAX_DOCUMENT_SIZE // (1024*1024)}MB",
+            },
         )
     if len(contents) == 0:
-        raise HTTPException(status_code=400, detail="Empty file")
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Empty file"})
 
     try:
         result = storage.save_document(
@@ -294,7 +303,7 @@ async def upload_document(
             original_filename=file.filename or "document",
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": str(e)})
 
     return result
 
@@ -304,7 +313,7 @@ def delete_document(project_id: str, document_id: str, _user: Annotated[dict, De
     """書類を削除する"""
     deleted = storage.delete_document(project_id, document_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Document not found"})
     return {"status": "deleted"}
 
 
@@ -325,7 +334,7 @@ def set_resubmit_instruction(
         reason=body.reason,
     )
     if project is None:
-        raise HTTPException(status_code=404, detail="Project or document not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project or document not found"})
     return project
 
 
@@ -338,12 +347,12 @@ def force_update_timelog(
     """打刻を強制上書き（管理者のみ）。手動修正フラグを記録する"""
     project = storage.get_project(project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
     work_date = project.get("work_date", "")
     iso_time = f"{work_date}T{data.time}:00"
     updated = storage.force_update_timelog(project_id, data.field, iso_time)
     if updated is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
     return updated
 
 
@@ -352,7 +361,7 @@ def get_document(project_id: str, stored_filename: str, _user: Annotated[dict, D
     """書類ファイルを返す"""
     doc_path = storage.get_document_path(project_id, stored_filename)
     if doc_path is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Document not found"})
     media_type, _ = mimetypes.guess_type(stored_filename)
     return FileResponse(doc_path, media_type=media_type or "application/octet-stream")
 
@@ -365,7 +374,7 @@ def validate_project(project_id: str, _user: Annotated[dict, Depends(get_current
     try:
         result = storage.validate_project(project_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail={"code": "BAD_REQUEST", "message": str(e)})
     return result
 
 
@@ -376,7 +385,7 @@ def export_excel(project_id: str, _user: Annotated[dict, Depends(get_current_use
     """案件のExcel報告書を生成してダウンロードする"""
     project = storage.get_project(project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
 
     # 未撮影スロットが残っている場合はサーバー側で拒否
     validation = storage.validate_project(project_id)
@@ -384,14 +393,17 @@ def export_excel(project_id: str, _user: Annotated[dict, Depends(get_current_use
         missing = validation["total_slots"] - validation["filled_slots"]
         raise HTTPException(
             status_code=400,
-            detail=f"撮影が未完了です。残り {missing} スロットが未撮影です。",
+            detail={"code": "BAD_REQUEST", "message": f"撮影が未完了です。残り {missing} スロットが未撮影です。"},
         )
 
     try:
         excel_bytes = generate_excel(project, storage.PHOTOS_DIR)
     except Exception:
         logger.exception("Excel generation failed")
-        raise HTTPException(status_code=500, detail="Excel generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail={"code": "INTERNAL_SERVER_ERROR", "message": "Excel generation failed"},
+        )
 
     filename = f"撮影報告書_{project['site_id']}_{project['work_date']}.xlsx"
     encoded_filename = quote(filename)
@@ -411,7 +423,7 @@ def get_photo(filename: str, _user: Annotated[dict, Depends(get_current_user)] =
     """写真ファイルを返す"""
     photo_path = storage.get_photo_path(filename)
     if photo_path is None:
-        raise HTTPException(status_code=404, detail="Photo not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Photo not found"})
     return FileResponse(photo_path, media_type="image/jpeg")
 
 
@@ -423,7 +435,7 @@ def login(body: LoginRequest):
     from auth import create_access_token
     user = user_storage.authenticate_user(body.username, body.password)
     if user is None:
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+        raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Invalid username or password"})
     token = create_access_token({"sub": user["user_id"], "role": user["role"], "display_name": user["display_name"]})
     return TokenResponse(access_token=token, role=user["role"], display_name=user["display_name"])
 
@@ -433,7 +445,7 @@ def get_me(current_user: Annotated[dict, Depends(get_current_user)]):
     """現在のログインユーザー情報を返す"""
     u = user_storage.get_user_by_username_or_id(current_user["sub"])
     if u is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found"})
     return u
 
 
@@ -449,7 +461,7 @@ def list_users(_admin: Annotated[dict, Depends(require_admin)]):
 def create_user(body: UserCreate, _admin: Annotated[dict, Depends(require_admin)]):
     """ユーザー作成（管理者のみ）"""
     if user_storage.get_user_by_username(body.username):
-        raise HTTPException(status_code=400, detail="Username already exists")
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Username already exists"})
     return user_storage.create_user(
         username=body.username,
         display_name=body.display_name,
@@ -462,10 +474,10 @@ def create_user(body: UserCreate, _admin: Annotated[dict, Depends(require_admin)
 def delete_user(user_id: str, admin: Annotated[dict, Depends(require_admin)]):
     """ユーザー削除（管理者のみ、自分自身は不可）"""
     if admin["sub"] == user_id:
-        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+        raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Cannot delete yourself"})
     deleted = user_storage.delete_user(user_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found"})
     return {"status": "deleted"}
 
 
@@ -504,7 +516,7 @@ def approve_project(project_id: str, _admin: Annotated[dict, Depends(require_adm
     """案件を承認し「案件終了」にする（管理者のみ）"""
     project = storage.approve_project(project_id)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "Project not found"})
     return project
 
 

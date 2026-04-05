@@ -1,9 +1,6 @@
 """ストレージのテスト"""
 
-import shutil
-import tempfile
 from datetime import date
-from pathlib import Path
 from unittest import mock
 
 import pytest

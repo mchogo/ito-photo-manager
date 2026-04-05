@@ -1,7 +1,6 @@
 """Excel出力のテスト"""
 
 import io
-import tempfile
 from datetime import date
 from pathlib import Path
 from unittest import mock
