@@ -111,11 +111,6 @@ export default function AdminSettingsPage() {
   const [docSaving, setDocSaving] = useState(false);
   const [docError, setDocError] = useState<string | null>(null);
 
-  // Sync local state when config loads
-  const syncedStatuses = config.statuses.length > 0 && statuses === config.statuses
-    ? config.statuses
-    : statuses;
-
   if (!isAdmin) {
     return (
       <div className="liquid-glass-red px-4 py-3 text-red-700 text-sm font-semibold">

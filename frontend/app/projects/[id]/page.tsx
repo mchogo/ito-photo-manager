@@ -21,7 +21,6 @@ import type {
   ProjectUpdateRequest,
   ValidationResult,
 } from "@/types";
-import { DOCUMENT_CATEGORY_TITLES } from "@/types";
 import { useAdminMode } from "@/lib/useAdminMode";
 import { useMasterConfig } from "@/lib/useMasterConfig";
 

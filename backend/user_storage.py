@@ -1,12 +1,16 @@
 """ユーザーストレージ
 
 ユーザーデータを data/users.json に保存する。
-初回起動時にデフォルト管理者 (admin / admin1234) を自動作成する。
+初回起動時にデフォルト管理者 (admin) を自動作成する。
+初期パスワードは `ITO_PM_DEFAULT_ADMIN_PASSWORD` またはランダム生成値を使用する。
 """
 
 from __future__ import annotations
 
 import json
+import logging
+import os
+import secrets
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -15,6 +19,7 @@ from auth import hash_password, verify_password
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 USERS_FILE = DATA_DIR / "users.json"
+logger = logging.getLogger(__name__)
 
 
 def _load_users() -> list[dict]:
@@ -93,9 +98,18 @@ def list_users() -> list[dict]:
 def ensure_default_admin() -> None:
     users = _load_users()
     if not users:
+        bootstrap_password = (os.getenv("ITO_PM_DEFAULT_ADMIN_PASSWORD") or "").strip()
+        if not bootstrap_password:
+            bootstrap_password = secrets.token_urlsafe(18)
+            logger.warning(
+                "ITO_PM_DEFAULT_ADMIN_PASSWORD が未設定のため、初期管理者パスワードを自動生成しました: %s",
+                bootstrap_password,
+            )
+            logger.warning("初回ログイン後は管理者アカウントのローテーションを実施してください。")
+
         create_user(
             username="admin",
             display_name="管理者",
-            password="admin1234",
+            password=bootstrap_password,
             role="admin",
         )

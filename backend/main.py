@@ -245,6 +245,7 @@ def set_retake_instruction(
 def list_documents(
     project_id: str,
     document_type: Optional[str] = Query(None, description="書類種別で絞り込み"),
+    _user: Annotated[dict, Depends(get_current_user)] = None,
 ):
     """案件の書類一覧を返す"""
     project = storage.get_project(project_id)

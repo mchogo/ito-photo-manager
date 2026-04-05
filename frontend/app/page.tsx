@@ -10,6 +10,15 @@ const LS_KEY_SITE_ID = "pm_siteId";
 const LS_KEY_WORKER = "pm_workerName";
 const LS_KEY_WORK_DATE = "pm_workDate";
 
+function getStoredValue(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [equipment, setEquipment] = useState<EquipmentDef[]>([]);
@@ -17,24 +26,12 @@ export default function HomePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [siteId, setSiteId] = useState("");
-  const [workDate, setWorkDate] = useState(new Date().toISOString().slice(0, 10));
-  const [workerName, setWorkerName] = useState("");
+  const [siteId, setSiteId] = useState(() => getStoredValue(LS_KEY_SITE_ID) ?? "");
+  const [workDate, setWorkDate] = useState(
+    () => getStoredValue(LS_KEY_WORK_DATE) || new Date().toISOString().slice(0, 10),
+  );
+  const [workerName, setWorkerName] = useState(() => getStoredValue(LS_KEY_WORKER) ?? "");
   const [selectedEquipment, setSelectedEquipment] = useState<Set<string>>(new Set());
-
-  // Restore saved inputs from localStorage on mount
-  useEffect(() => {
-    try {
-      const savedSiteId = localStorage.getItem(LS_KEY_SITE_ID);
-      const savedWorker = localStorage.getItem(LS_KEY_WORKER);
-      const savedDate = localStorage.getItem(LS_KEY_WORK_DATE);
-      if (savedSiteId) setSiteId(savedSiteId);
-      if (savedWorker) setWorkerName(savedWorker);
-      if (savedDate) setWorkDate(savedDate);
-    } catch {
-      // localStorage unavailable — silently ignore
-    }
-  }, []);
 
   // Persist inputs to localStorage on every change
   const handleSiteIdChange = useCallback((value: string) => {
@@ -62,7 +59,11 @@ export default function HomePage() {
   const handleToggle = (id: string) => {
     setSelectedEquipment((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
       return next;
     });
   };

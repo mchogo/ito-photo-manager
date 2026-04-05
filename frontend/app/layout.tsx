@@ -19,7 +19,6 @@ export default function RootLayout({
     <html lang="ja">
       <head>
         {/* Anti-flash: set data-theme before React hydrates to prevent theme flicker */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('pm_theme')||'dark';document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,

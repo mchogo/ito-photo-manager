@@ -93,7 +93,10 @@ export function useNotifications() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const timer = setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [refresh]);
 
   return { notifications, refresh };

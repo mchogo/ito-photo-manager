@@ -36,7 +36,10 @@ export function useMasterConfig() {
   }, []);
 
   useEffect(() => {
-    reload();
+    const timer = setTimeout(() => {
+      void reload();
+    }, 0);
+    return () => clearTimeout(timer);
   }, [reload]);
 
   /** ステータスのバッジクラスを返す（未知の場合は gray） */

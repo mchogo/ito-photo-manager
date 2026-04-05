@@ -146,6 +146,14 @@ class TestPhotoAPI:
         assert res.status_code == 200
 
 
+class TestDocumentAPI:
+    def test_list_documents_requires_authentication(self):
+        # client fixture は認証を上書きするため、このケースでは生の app を使う
+        tc = TestClient(app)
+        res = tc.get("/api/projects/dummy-project/documents")
+        assert res.status_code == 401
+
+
 class TestValidationAPI:
     def test_validation_incomplete(self, client):
         res = client.post("/api/projects", json={

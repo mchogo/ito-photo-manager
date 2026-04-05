@@ -51,6 +51,19 @@ ito-photo-manager/
 - Node.js 22+
 - npm
 
+### セキュリティ環境変数（推奨）
+
+```bash
+# JWT署名鍵（本番では必須）
+export ITO_PM_SECRET_KEY="十分に長いランダム文字列"
+
+# 初期管理者パスワード（初回起動時のadmin作成に使用）
+export ITO_PM_DEFAULT_ADMIN_PASSWORD="強固な初期パスワード"
+```
+
+`ITO_PM_SECRET_KEY` 未設定時は `data/.jwt_secret_key` を自動生成して使用します。  
+`ITO_PM_DEFAULT_ADMIN_PASSWORD` 未設定時はランダムな初期管理者パスワードを自動生成し、バックエンドログに出力します。
+
 ### インストール
 
 ```bash
