@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, Response
 
 import equipment_master
 import master_config as mc
+import reference_data as ref_data
 import storage
 import user_storage
 from auth import get_current_user, require_admin
@@ -648,3 +649,17 @@ def update_document_types(
     config["document_types"] = [d.model_dump() for d in document_types]
     mc.save_config(config)
     return config
+
+
+# --- 参照データ（拠点マスタ / 依頼シートテンプレ） ---
+
+@app.get("/api/reference/site-master")
+def get_site_master(_user: Annotated[dict, Depends(get_current_user)]):
+    """拠点マスタ（NCR）を取得する"""
+    return ref_data.load_site_master()
+
+
+@app.get("/api/reference/request-sheet-template")
+def get_request_sheet_template(_user: Annotated[dict, Depends(get_current_user)]):
+    """依頼シートテンプレートを取得する"""
+    return ref_data.load_request_sheet_template()

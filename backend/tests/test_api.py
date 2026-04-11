@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 import storage
+import reference_data as ref_data
 from auth import get_current_user, require_admin
 from main import app
 
@@ -17,10 +18,22 @@ def temp_data_dir(tmp_path):
     """テスト用の一時データディレクトリ"""
     projects_dir = tmp_path / "projects"
     photos_dir = tmp_path / "photos"
+    site_master_path = tmp_path / "site_master_ncr.json"
+    request_template_path = tmp_path / "request_sheet_template.json"
     projects_dir.mkdir()
     photos_dir.mkdir()
+    site_master_path.write_text(
+        '{"source_sheet":"拠点マスタ（NCR）","record_count":1,"records":[{"営業所":"テスト営業所"}]}',
+        encoding="utf-8",
+    )
+    request_template_path.write_text(
+        '{"source_sheet":"依頼シート","template":{"title":"テストテンプレ","sections":[]}}',
+        encoding="utf-8",
+    )
     with mock.patch.object(storage, "PROJECTS_DIR", projects_dir), \
-         mock.patch.object(storage, "PHOTOS_DIR", photos_dir):
+         mock.patch.object(storage, "PHOTOS_DIR", photos_dir), \
+         mock.patch.object(ref_data, "SITE_MASTER_PATH", site_master_path), \
+         mock.patch.object(ref_data, "REQUEST_TEMPLATE_PATH", request_template_path):
         yield tmp_path
 
 
@@ -51,6 +64,22 @@ class TestEquipmentAPI:
         data = res.json()
         assert len(data) == 5
         assert data[0]["equipment_id"] == "pos_register"
+
+
+class TestReferenceDataAPI:
+    def test_get_site_master(self, client):
+        res = client.get("/api/reference/site-master")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["source_sheet"] == "拠点マスタ（NCR）"
+        assert data["record_count"] == 1
+
+    def test_get_request_sheet_template(self, client):
+        res = client.get("/api/reference/request-sheet-template")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["source_sheet"] == "依頼シート"
+        assert data["template"]["title"] == "テストテンプレ"
 
 
 class TestProjectAPI:
