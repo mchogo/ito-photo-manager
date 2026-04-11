@@ -112,3 +112,21 @@ make e2e
 - [基本的なコーディング規約](./docs/coding-standards/基本的なコーディング規約.md)
 - [FastAPI エンドポイント設計ポリシー](./docs/coding-standards/FastAPIエンドポイント設計ポリシー.md)
 - [フロントエンドでの API の叩き方](./docs/coding-standards/フロントエンドでのAPIの叩き方.md)
+
+## Streamlit Cloud での公開（クライアント画面）
+
+このリポジトリは本体が `FastAPI + Next.js` 構成です。  
+`streamlit_app.py` は、Render などで公開した FastAPI に接続するための簡易クライアントです。
+
+### Streamlit Cloud 設定
+- Main file path: `streamlit_app.py`
+- Python dependencies: ルート `requirements.txt` を使用
+
+### Secrets（推奨）
+Streamlit Cloud の `Secrets` に以下を設定:
+
+```toml
+API_BASE_URL = "https://<your-render-backend>.onrender.com"
+```
+
+`API_BASE_URL` が未設定の場合は `http://localhost:8000` を参照します。
