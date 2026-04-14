@@ -134,6 +134,21 @@ async function fulfillJson(route: Route, body: unknown): Promise<void> {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+function getMultipartField(body: string | null, fieldName: string): string | null {
+  if (!body) return null;
+  const marker = `name="${fieldName}"`;
+  const markerIndex = body.indexOf(marker);
+  if (markerIndex < 0) return null;
+
+  const valueStart = body.indexOf('\r\n\r\n', markerIndex);
+  if (valueStart < 0) return null;
+
+  const valueEnd = body.indexOf('\r\n', valueStart + 4);
+  if (valueEnd < 0) return null;
+
+  return body.slice(valueStart + 4, valueEnd);
+}
+
 test('案件作成フロー', async ({ page }) => {
   await setAuth(page, 'worker');
   const project = makeProject('p-create-1');
@@ -153,8 +168,8 @@ test('案件作成フロー', async ({ page }) => {
   });
 
   await page.goto('/');
-  await page.getByLabel('現場ID').fill('SITE-001');
-  await page.getByLabel('作業員名').fill('田中太郎');
+  await page.getByPlaceholder('例: SITE-001').fill('SITE-001');
+  await page.getByPlaceholder('例: 田中太郎').fill('田中太郎');
   await page.getByRole('checkbox').first().check();
   await page.getByRole('button', { name: '撮影開始' }).click();
 
@@ -211,6 +226,7 @@ test('写真アップロード〜完了判定', async ({ page }) => {
 test('書類アップロード〜案件承認', async ({ page }) => {
   await setAuth(page, 'admin');
   const project = makeProject('p-doc-1');
+  project.status = '図書提出待ち';
 
   await page.route('**/api/**', async (route) => {
     const req = route.request();
@@ -221,19 +237,23 @@ test('書類アップロード〜案件承認', async ({ page }) => {
     if (url.pathname === `/api/projects/${project.project_id}/validate` && req.method() === 'GET') return fulfillJson(route, validationOf(project));
 
     if (url.pathname === `/api/projects/${project.project_id}/documents` && req.method() === 'POST') {
+      const uploadedDocumentType = getMultipartField(req.postData(), 'document_type') ?? '不明';
       project.documents = [
         {
           document_id: 'doc-1',
           project_id: project.project_id,
-          document_type: '依頼シート',
-          original_filename: 'request.pdf',
-          stored_filename: 'stored-request.pdf',
+          document_type: uploadedDocumentType,
+          original_filename: 'completion-installation.pdf',
+          stored_filename: 'stored-completion-installation.pdf',
           size_bytes: 1024,
           uploaded_at: '2026-04-14T11:00:00Z',
           resubmit_instruction: null,
           resubmit_requested_at: null,
         },
       ];
+      if (project.status === '図書提出待ち' && ['完成図書_調査', '完成図書_設置'].includes(uploadedDocumentType)) {
+        project.status = '成果物提出待ち';
+      }
       return fulfillJson(route, project.documents[0]);
     }
 
@@ -250,14 +270,15 @@ test('書類アップロード〜案件承認', async ({ page }) => {
   await page.goto(`/projects/${project.project_id}`);
   await page.getByRole('button', { name: '書類管理' }).click();
 
-  const uploadInput = page.locator('input[type="file"]').first();
+  const installationSection = page.locator('div.liquid-glass').filter({ has: page.getByRole('heading', { name: '設置' }) }).first();
+  const uploadInput = installationSection.locator('input[type="file"]');
   await uploadInput.setInputFiles({
-    name: 'request.pdf',
+    name: 'completion-installation.pdf',
     mimeType: 'application/pdf',
     buffer: Buffer.from('dummy pdf'),
   });
 
-  await expect(page.getByText('📄 request.pdf')).toBeVisible();
+  await expect(page.getByText('📄 completion-installation.pdf')).toBeVisible();
 
   await page.goto('/admin');
   await page.getByRole('button', { name: '✓ 承認して案件終了' }).first().click();
