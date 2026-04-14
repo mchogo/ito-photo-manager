@@ -153,8 +153,8 @@ test('案件作成フロー', async ({ page }) => {
   });
 
   await page.goto('/');
-  await page.getByLabel('現場ID').fill('SITE-001');
-  await page.getByLabel('作業員名').fill('田中太郎');
+  await page.getByPlaceholder('例: SITE-001').fill('SITE-001');
+  await page.getByPlaceholder('例: 田中太郎').fill('田中太郎');
   await page.getByRole('checkbox').first().check();
   await page.getByRole('button', { name: '撮影開始' }).click();
 
@@ -234,6 +234,7 @@ test('書類アップロード〜案件承認', async ({ page }) => {
           resubmit_requested_at: null,
         },
       ];
+      project.status = '成果物提出待ち';
       return fulfillJson(route, project.documents[0]);
     }
 
