@@ -44,6 +44,22 @@ ito-photo-manager/
 └── start-prod.sh         # 本番用起動スクリプト
 ```
 
+## data 運用ルール
+
+`data/` 配下は「テンプレート・マスタ定義」と「ランタイム生成データ」が混在します。運用は次のとおりです。
+
+- **Git 追跡するもの（共有する設定）**
+  - `data/master_config.json`
+  - `data/request_sheet_template.json`
+  - `data/site_master_ncr.json`
+- **Git 追跡しないもの（環境ごとの機密・運用データ）**
+  - `data/users.json`（認証ユーザー情報）
+  - `data/.jwt_secret_key`（JWT 署名鍵）
+  - `data/projects/`
+  - `data/photos/`
+
+`data/users.json` や `data/.jwt_secret_key` はアプリ実行時に生成・更新される可能性があるため、コミットしないでください。
+
 ## セットアップ手順
 
 ### 前提条件
