@@ -211,6 +211,7 @@ test('写真アップロード〜完了判定', async ({ page }) => {
 test('書類アップロード〜案件承認', async ({ page }) => {
   await setAuth(page, 'admin');
   const project = makeProject('p-doc-1');
+  project.status = '図書提出待ち';
 
   await page.route('**/api/**', async (route) => {
     const req = route.request();
@@ -221,20 +222,23 @@ test('書類アップロード〜案件承認', async ({ page }) => {
     if (url.pathname === `/api/projects/${project.project_id}/validate` && req.method() === 'GET') return fulfillJson(route, validationOf(project));
 
     if (url.pathname === `/api/projects/${project.project_id}/documents` && req.method() === 'POST') {
+      const uploadedDocumentType = '完成図書_設置';
       project.documents = [
         {
           document_id: 'doc-1',
           project_id: project.project_id,
-          document_type: '依頼シート',
-          original_filename: 'request.pdf',
-          stored_filename: 'stored-request.pdf',
+          document_type: uploadedDocumentType,
+          original_filename: 'completion-installation.pdf',
+          stored_filename: 'stored-completion-installation.pdf',
           size_bytes: 1024,
           uploaded_at: '2026-04-14T11:00:00Z',
           resubmit_instruction: null,
           resubmit_requested_at: null,
         },
       ];
-      project.status = '成果物提出待ち';
+      if (project.status === '図書提出待ち' && ['完成図書_調査', '完成図書_設置'].includes(uploadedDocumentType)) {
+        project.status = '成果物提出待ち';
+      }
       return fulfillJson(route, project.documents[0]);
     }
 
@@ -253,12 +257,12 @@ test('書類アップロード〜案件承認', async ({ page }) => {
 
   const uploadInput = page.locator('input[type="file"]').first();
   await uploadInput.setInputFiles({
-    name: 'request.pdf',
+    name: 'completion-installation.pdf',
     mimeType: 'application/pdf',
     buffer: Buffer.from('dummy pdf'),
   });
 
-  await expect(page.getByText('📄 request.pdf')).toBeVisible();
+  await expect(page.getByText('📄 completion-installation.pdf')).toBeVisible();
 
   await page.goto('/admin');
   await page.getByRole('button', { name: '✓ 承認して案件終了' }).first().click();
