@@ -148,7 +148,7 @@ class ProjectResponse(BaseModel):
     scheduled_date: Optional[date] = None
     # Phase 2 拡張フィールド
     survey_notes: Optional[str] = None
-    documents: List[DocumentResponse] = []
+    documents: List[DocumentResponse] = Field(default_factory=list)
     # Phase 3 打刻フィールド
     departure_time: Optional[datetime] = None
     arrival_time: Optional[datetime] = None
