@@ -5,6 +5,10 @@ line-length = 120
 select = ["E", "F", "T201", "T203"]
 ignore = []
 
+[lint.per-file-ignores]
+"check_422.py" = ["T201"]
+"tools/register_reference_data.py" = ["T201"]
+
 [format]
 quote-style = "double"
 indent-style = "space"

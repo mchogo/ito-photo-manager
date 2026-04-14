@@ -57,3 +57,5 @@ Thumbs.db
 # === Runtime data ===
 data/projects/
 data/photos/
+data/users.json
+data/.jwt_secret_key
