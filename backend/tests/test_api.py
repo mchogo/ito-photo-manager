@@ -128,6 +128,7 @@ class TestProjectAPI:
     def test_get_nonexistent_project(self, client):
         res = client.get("/api/projects/doesnotexist")
         assert res.status_code == 404
+        assert res.json()["detail"] == {"code": "NOT_FOUND", "message": "Project not found"}
 
 
 class TestPhotoAPI:
@@ -181,6 +182,15 @@ class TestDocumentAPI:
         tc = TestClient(app)
         res = tc.get("/api/projects/dummy-project/documents")
         assert res.status_code == 401
+        assert res.json()["detail"] == {"code": "UNAUTHORIZED", "message": "Not authenticated"}
+
+
+class TestAuthErrorFormat:
+    def test_auth_me_with_invalid_token_returns_standard_error(self):
+        tc = TestClient(app)
+        res = tc.get("/api/auth/me", headers={"Authorization": "Bearer invalid-token"})
+        assert res.status_code == 401
+        assert res.json()["detail"] == {"code": "UNAUTHORIZED", "message": "Invalid or expired token"}
 
 
 class TestValidationAPI:

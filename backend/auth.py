@@ -16,7 +16,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 SECRET_KEY_FILE = DATA_DIR / ".jwt_secret_key"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
 @lru_cache(maxsize=1)
@@ -77,12 +77,18 @@ def verify_token(token: str) -> dict:
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail={"code": "UNAUTHORIZED", "message": "Invalid or expired token"},
             headers={"WWW-Authenticate": "Bearer"},
         )
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
+async def get_current_user(token: Annotated[str | None, Depends(oauth2_scheme)]) -> dict:
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "UNAUTHORIZED", "message": "Not authenticated"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return verify_token(token)
 
 
@@ -90,6 +96,6 @@ async def require_admin(user: Annotated[dict, Depends(get_current_user)]) -> dic
     if user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required",
+            detail={"code": "FORBIDDEN", "message": "Admin role required"},
         )
     return user

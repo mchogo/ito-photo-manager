@@ -28,6 +28,7 @@ from image_utils import resize_image
 from models import (
     DocumentResponse,
     DocumentType,
+    ErrorResponse,
     ImportResult,
     LoginRequest,
     MasterConfig,
@@ -52,10 +53,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+COMMON_ERROR_RESPONSES = {
+    400: {"model": ErrorResponse, "description": "不正なリクエスト"},
+    401: {"model": ErrorResponse, "description": "認証エラー"},
+    403: {"model": ErrorResponse, "description": "権限エラー"},
+    404: {"model": ErrorResponse, "description": "リソース未検出"},
+    422: {"model": ErrorResponse, "description": "入力バリデーションエラー"},
+    500: {"model": ErrorResponse, "description": "サーバー内部エラー"},
+}
+
 app = FastAPI(
     title="いとうさんフォトマネージャー API",
     description="現場撮影管理・Excel自動化システム",
     version="4.0.0",
+    responses=COMMON_ERROR_RESPONSES,
 )
 
 
