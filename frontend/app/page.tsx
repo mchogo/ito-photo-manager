@@ -1,53 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EquipmentDef } from "@/types";
-import { getEquipmentList, createProject } from "@/lib/api";
+import { getEquipmentList } from "@/lib/api";
 import EquipmentSelector from "@/components/EquipmentSelector";
-
-const LS_KEY_SITE_ID = "pm_siteId";
-const LS_KEY_WORKER = "pm_workerName";
-const LS_KEY_WORK_DATE = "pm_workDate";
-
-function getStoredValue(key: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
+import { useCreateProjectForm } from "@/lib/useCreateProjectForm";
 
 export default function HomePage() {
   const router = useRouter();
   const [equipment, setEquipment] = useState<EquipmentDef[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [siteId, setSiteId] = useState(() => getStoredValue(LS_KEY_SITE_ID) ?? "");
-  const [workDate, setWorkDate] = useState(
-    () => getStoredValue(LS_KEY_WORK_DATE) || new Date().toISOString().slice(0, 10),
-  );
-  const [workerName, setWorkerName] = useState(() => getStoredValue(LS_KEY_WORKER) ?? "");
-  const [selectedEquipment, setSelectedEquipment] = useState<Set<string>>(new Set());
-
-  // Persist inputs to localStorage on every change
-  const handleSiteIdChange = useCallback((value: string) => {
-    setSiteId(value);
-    try { localStorage.setItem(LS_KEY_SITE_ID, value); } catch {}
-  }, []);
-
-  const handleWorkerNameChange = useCallback((value: string) => {
-    setWorkerName(value);
-    try { localStorage.setItem(LS_KEY_WORKER, value); } catch {}
-  }, []);
-
-  const handleWorkDateChange = useCallback((value: string) => {
-    setWorkDate(value);
-    try { localStorage.setItem(LS_KEY_WORK_DATE, value); } catch {}
-  }, []);
 
   useEffect(() => {
     getEquipmentList()
@@ -56,42 +20,24 @@ export default function HomePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleToggle = (id: string) => {
-    setSelectedEquipment((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const canSubmit =
-    siteId.trim() && workerName.trim() && workDate && selectedEquipment.size > 0 && !submitting;
-
-  const totalPhotos = equipment
-    .filter((eq) => selectedEquipment.has(eq.equipment_id))
-    .reduce((sum, eq) => sum + eq.photo_slots.length, 0);
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const project = await createProject({
-        site_id: siteId.trim(),
-        work_date: workDate,
-        worker_name: workerName.trim(),
-        equipment_ids: Array.from(selectedEquipment),
-      });
-      router.push(`/shoot?projectId=${project.project_id}`);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "案件の作成に失敗しました");
-      setSubmitting(false);
-    }
-  };
+  const {
+    submitting,
+    siteId,
+    workDate,
+    workerName,
+    selectedEquipment,
+    canSubmit,
+    totalPhotos,
+    handleSiteIdChange,
+    handleWorkerNameChange,
+    handleWorkDateChange,
+    handleToggle,
+    handleSubmit,
+  } = useCreateProjectForm({
+    equipment,
+    onCreated: (projectId) => router.push(`/shoot?projectId=${projectId}`),
+    onError: setError,
+  });
 
   if (loading) {
     return (
