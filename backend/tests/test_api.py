@@ -194,6 +194,18 @@ class TestAuthErrorFormat:
         assert res.json() == {"code": "UNAUTHORIZED", "message": "Invalid or expired token"}
 
 
+class TestFrameworkErrorFormat:
+    def test_unknown_route_returns_standard_error(self, client):
+        res = client.get("/api/not-found-route")
+        assert res.status_code == 404
+        assert res.json() == {"code": "HTTP_404", "message": "Not Found"}
+
+    def test_method_not_allowed_returns_standard_error(self, client):
+        res = client.put("/api/equipment")
+        assert res.status_code == 405
+        assert res.json() == {"code": "HTTP_405", "message": "Method Not Allowed"}
+
+
 class TestValidationAPI:
     def test_validation_incomplete(self, client):
         res = client.post("/api/projects", json={
