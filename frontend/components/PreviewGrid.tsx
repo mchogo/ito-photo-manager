@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { EquipmentStatus } from "@/types";
 import { getPhotoUrl } from "@/lib/api";
 
@@ -70,15 +71,16 @@ export default function PreviewGrid({ equipment }: Props) {
                 >
                   {slot.photo_filename ? (
                     <div className="relative group">
-                      <img
+                      <Image
                         src={getPhotoUrl(slot.photo_filename)}
                         alt={`${eq.name} - ${slot.label}`}
-                        className="w-full h-36 object-cover"
+                        width={640}
+                        height={360}
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        className="w-full h-36 object-cover transition-transform duration-300 group-hover:scale-105"
                         style={{
                           transition: "transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)",
                         }}
-                        onMouseOver={(e) => (e.currentTarget.style.transform = "scale(1.05)")}
-                        onMouseOut={(e) => (e.currentTarget.style.transform = "scale(1)")}
                       />
                       <div className="absolute top-2 right-2">
                         <div
