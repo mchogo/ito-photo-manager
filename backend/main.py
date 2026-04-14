@@ -13,9 +13,12 @@ from datetime import date
 from typing import Annotated, List, Optional
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.responses import FileResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import equipment_master
 import master_config as mc
@@ -68,6 +71,51 @@ app = FastAPI(
     version="4.0.0",
     responses=COMMON_ERROR_RESPONSES,
 )
+
+
+@app.exception_handler(HTTPException)
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(_request: Request, exc: HTTPException | StarletteHTTPException):
+    if isinstance(exc.detail, dict):
+        code = exc.detail.get("code")
+        message = exc.detail.get("message")
+        if isinstance(code, str) and isinstance(message, str):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=ErrorResponse(code=code, message=message).model_dump(),
+                headers=exc.headers,
+            )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=ErrorResponse(
+            code=f"HTTP_{exc.status_code}",
+            message=str(exc.detail),
+        ).model_dump(),
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(_request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content=ErrorResponse(
+            code="VALIDATION_ERROR",
+            message=str(exc.errors()),
+        ).model_dump(),
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(_request: Request, _exc: Exception):
+    logger.exception("Unhandled server error")
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            code="INTERNAL_SERVER_ERROR",
+            message="Internal server error",
+        ).model_dump(),
+    )
 
 
 @app.on_event("startup")

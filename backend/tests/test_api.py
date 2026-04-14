@@ -112,6 +112,7 @@ class TestProjectAPI:
             "equipment_ids": ["pos_register"],
         })
         assert res.status_code == 422  # Validation error
+        assert res.json()["code"] == "VALIDATION_ERROR"
 
     def test_get_project(self, client):
         create_res = client.post("/api/projects", json={
@@ -128,7 +129,7 @@ class TestProjectAPI:
     def test_get_nonexistent_project(self, client):
         res = client.get("/api/projects/doesnotexist")
         assert res.status_code == 404
-        assert res.json()["detail"] == {"code": "NOT_FOUND", "message": "Project not found"}
+        assert res.json() == {"code": "NOT_FOUND", "message": "Project not found"}
 
 
 class TestPhotoAPI:
@@ -182,7 +183,7 @@ class TestDocumentAPI:
         tc = TestClient(app)
         res = tc.get("/api/projects/dummy-project/documents")
         assert res.status_code == 401
-        assert res.json()["detail"] == {"code": "UNAUTHORIZED", "message": "Not authenticated"}
+        assert res.json() == {"code": "UNAUTHORIZED", "message": "Not authenticated"}
 
 
 class TestAuthErrorFormat:
@@ -190,7 +191,19 @@ class TestAuthErrorFormat:
         tc = TestClient(app)
         res = tc.get("/api/auth/me", headers={"Authorization": "Bearer invalid-token"})
         assert res.status_code == 401
-        assert res.json()["detail"] == {"code": "UNAUTHORIZED", "message": "Invalid or expired token"}
+        assert res.json() == {"code": "UNAUTHORIZED", "message": "Invalid or expired token"}
+
+
+class TestFrameworkErrorFormat:
+    def test_unknown_route_returns_standard_error(self, client):
+        res = client.get("/api/not-found-route")
+        assert res.status_code == 404
+        assert res.json() == {"code": "HTTP_404", "message": "Not Found"}
+
+    def test_method_not_allowed_returns_standard_error(self, client):
+        res = client.put("/api/equipment")
+        assert res.status_code == 405
+        assert res.json() == {"code": "HTTP_405", "message": "Method Not Allowed"}
 
 
 class TestValidationAPI:

@@ -35,7 +35,9 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
     let errMessage = text;
     try {
       const data = JSON.parse(text);
-      if (data.detail && typeof data.detail === "object" && data.detail.message) {
+      if (typeof data.message === "string") {
+        errMessage = data.message;
+      } else if (data.detail && typeof data.detail === "object" && data.detail.message) {
         errMessage = data.detail.message;
       } else if (data.detail) {
         errMessage = String(data.detail);
