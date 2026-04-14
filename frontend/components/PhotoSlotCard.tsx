@@ -138,7 +138,7 @@ export default function PhotoSlotCard({
                 src={getPhotoUrl(slot.photo_filename!)}
                 alt={`${equipmentName} - ${slot.label}`}
                 fill
-                sizes="(max-width: 640px) 100vw, 33vw"
+                sizes="(max-width: 640px) 50vw, 33vw"
                 className="object-cover transition-transform duration-300"
                 style={{ transition: "transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)" }}
               />
