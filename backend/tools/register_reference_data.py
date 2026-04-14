@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT_DIR / "data"
 SITE_MASTER_PATH = DATA_DIR / "site_master_ncr.json"
 REQUEST_TEMPLATE_PATH = DATA_DIR / "request_sheet_template.json"
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize(value: Any) -> Any:
@@ -181,9 +184,10 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    print(f"Registered: {SITE_MASTER_PATH}")
-    print(f"Registered: {REQUEST_TEMPLATE_PATH}")
+    logger.info("Registered: %s", SITE_MASTER_PATH)
+    logger.info("Registered: %s", REQUEST_TEMPLATE_PATH)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     main()
