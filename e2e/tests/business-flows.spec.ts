@@ -134,6 +134,21 @@ async function fulfillJson(route: Route, body: unknown): Promise<void> {
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 }
 
+function getMultipartField(body: string | null, fieldName: string): string | null {
+  if (!body) return null;
+  const marker = `name="${fieldName}"`;
+  const markerIndex = body.indexOf(marker);
+  if (markerIndex < 0) return null;
+
+  const valueStart = body.indexOf('\r\n\r\n', markerIndex);
+  if (valueStart < 0) return null;
+
+  const valueEnd = body.indexOf('\r\n', valueStart + 4);
+  if (valueEnd < 0) return null;
+
+  return body.slice(valueStart + 4, valueEnd);
+}
+
 test('案件作成フロー', async ({ page }) => {
   await setAuth(page, 'worker');
   const project = makeProject('p-create-1');
@@ -222,7 +237,7 @@ test('書類アップロード〜案件承認', async ({ page }) => {
     if (url.pathname === `/api/projects/${project.project_id}/validate` && req.method() === 'GET') return fulfillJson(route, validationOf(project));
 
     if (url.pathname === `/api/projects/${project.project_id}/documents` && req.method() === 'POST') {
-      const uploadedDocumentType = '完成図書_設置';
+      const uploadedDocumentType = getMultipartField(req.postData(), 'document_type') ?? '不明';
       project.documents = [
         {
           document_id: 'doc-1',
@@ -255,7 +270,8 @@ test('書類アップロード〜案件承認', async ({ page }) => {
   await page.goto(`/projects/${project.project_id}`);
   await page.getByRole('button', { name: '書類管理' }).click();
 
-  const uploadInput = page.locator('input[type="file"]').first();
+  const installationSection = page.locator('div.liquid-glass').filter({ has: page.getByRole('heading', { name: '設置' }) }).first();
+  const uploadInput = installationSection.locator('input[type="file"]');
   await uploadInput.setInputFiles({
     name: 'completion-installation.pdf',
     mimeType: 'application/pdf',
