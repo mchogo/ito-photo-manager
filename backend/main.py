@@ -10,7 +10,7 @@ import io
 import logging
 import mimetypes
 from datetime import date
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Optional, Union
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
@@ -45,6 +45,7 @@ from models import (
     TimelogForceUpdate,
     TokenResponse,
     UserCreate,
+    UserRole,
     UserResponse,
     ValidationResult,
 )
@@ -73,9 +74,20 @@ app = FastAPI(
 )
 
 
+def _to_user_response(user: dict) -> UserResponse:
+    """内部ユーザー辞書（hashed_password 含む）を公開レスポンス形式へ変換する。"""
+    return UserResponse(
+        user_id=user["user_id"],
+        username=user["username"],
+        display_name=user["display_name"],
+        role=UserRole(user["role"]),
+        created_at=user["created_at"],
+    )
+
+
 @app.exception_handler(HTTPException)
 @app.exception_handler(StarletteHTTPException)
-async def http_exception_handler(_request: Request, exc: HTTPException | StarletteHTTPException):
+async def http_exception_handler(_request: Request, exc: Union[HTTPException, StarletteHTTPException]):
     if isinstance(exc.detail, dict):
         code = exc.detail.get("code")
         message = exc.detail.get("message")
@@ -497,8 +509,9 @@ def login(body: LoginRequest):
     user = user_storage.authenticate_user(body.username, body.password)
     if user is None:
         raise HTTPException(status_code=401, detail={"code": "UNAUTHORIZED", "message": "Invalid username or password"})
-    token = create_access_token({"sub": user["user_id"], "role": user["role"], "display_name": user["display_name"]})
-    return TokenResponse(access_token=token, role=user["role"], display_name=user["display_name"])
+    role = UserRole(user["role"])
+    token = create_access_token({"sub": user["user_id"], "role": role.value, "display_name": user["display_name"]})
+    return TokenResponse(access_token=token, role=role, display_name=user["display_name"])
 
 
 @app.get("/api/auth/me", response_model=UserResponse)
@@ -507,7 +520,7 @@ def get_me(current_user: Annotated[dict, Depends(get_current_user)]):
     u = user_storage.get_user_by_username_or_id(current_user["sub"])
     if u is None:
         raise HTTPException(status_code=404, detail={"code": "NOT_FOUND", "message": "User not found"})
-    return u
+    return _to_user_response(u)
 
 
 # --- Phase 4: ユーザー管理 ---
@@ -515,7 +528,7 @@ def get_me(current_user: Annotated[dict, Depends(get_current_user)]):
 @app.get("/api/users", response_model=List[UserResponse])
 def list_users(_admin: Annotated[dict, Depends(require_admin)]):
     """ユーザー一覧（管理者のみ）"""
-    return user_storage.list_users()
+    return [_to_user_response(u) for u in user_storage.list_users()]
 
 
 @app.post("/api/users", response_model=UserResponse)
@@ -523,12 +536,13 @@ def create_user(body: UserCreate, _admin: Annotated[dict, Depends(require_admin)
     """ユーザー作成（管理者のみ）"""
     if user_storage.get_user_by_username(body.username):
         raise HTTPException(status_code=400, detail={"code": "BAD_REQUEST", "message": "Username already exists"})
-    return user_storage.create_user(
+    created = user_storage.create_user(
         username=body.username,
         display_name=body.display_name,
         password=body.password,
         role=body.role.value,
     )
+    return _to_user_response(created)
 
 
 @app.delete("/api/users/{user_id}")
