@@ -3,7 +3,7 @@ import secrets
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -82,7 +82,7 @@ def verify_token(token: str) -> dict:
         )
 
 
-async def get_current_user(token: Annotated[str | None, Depends(oauth2_scheme)]) -> dict:
+async def get_current_user(token: Annotated[Optional[str], Depends(oauth2_scheme)]) -> dict:
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
